@@ -28,25 +28,22 @@
 
   <div class="login-page">
     <div class="login-card" style="animation: modal-in .3s ease">
-      <!-- LOGO -->
       <div class="login-logo-wrap">
         <div class="login-logo-mark brand-logo-mark">J</div>
         <div class="login-title brand-name">JARVIS ERP</div>
         <div class="login-sub brand-tagline">Gestão Automotiva Inteligente</div>
       </div>
 
-      <!-- TABS -->
       <div style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
         <button class="btn btn-ghost" id="tabMaster" onclick="switchTab('master')" style="flex:1;border-radius:0;border-bottom:2px solid var(--brand);background:transparent">Master</button>
         <button class="btn btn-ghost" id="tabEquipe" onclick="switchTab('equipe')" style="flex:1;border-radius:0;border-bottom:2px solid transparent;background:transparent">Equipe</button>
-        <button class="btn btn-ghost" id="tabPin"    onclick="switchTab('pin')"    style="flex:1;border-radius:0;border-bottom:2px solid transparent;background:transparent">PIN</button>
+        <button class="btn btn-ghost" id="tabPin" onclick="switchTab('pin')" style="flex:1;border-radius:0;border-bottom:2px solid transparent;background:transparent">PIN</button>
       </div>
 
-      <!-- MASTER LOGIN -->
       <div id="masterTab" class="login-tab">
         <div id="loginErr" class="login-err">Usuário ou senha incorretos.</div>
         <div class="form-group">
-          <label class="form-label">Usuário de acesso</label>
+          <label class="form-label">Usuário de acesso (ou E-mail)</label>
           <input class="input input-mono" id="usr" type="text" placeholder="seu.usuario" autocomplete="off" spellcheck="false">
         </div>
         <div class="form-group">
@@ -61,7 +58,6 @@
         </button>
       </div>
 
-      <!-- EQUIPE LOGIN -->
       <div id="equipeTab" class="login-tab" style="display:none">
         <div id="loginErrEquipe" class="login-err">Usuário ou senha incorretos.</div>
         <div class="form-group">
@@ -80,7 +76,6 @@
         </button>
       </div>
 
-      <!-- PIN LOGIN -->
       <div id="pinTab" class="login-tab" style="display:none">
         <div id="loginErrPin" class="login-err">Usuário ou PIN incorreto.</div>
         <div class="form-group">
@@ -96,64 +91,98 @@
         </button>
       </div>
 
-      <!-- FOOTER -->
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
         <div class="status-dot online"></div>
         <span style="font-family:var(--ff-mono);font-size:.62rem;color:var(--text-muted)">SISTEMA OPERACIONAL</span>
       </div>
       <div style="position:absolute;bottom:20px;left:0;right:0;text-align:center;font-family:var(--ff-mono);font-size:.6rem;color:var(--text-disabled)">
-        <span class="brand-footer">Powered by thIAguinho Soluções · 2026</span>
+        <span class="brand-footer">Powered by JARVIS ERP</span>
       </div>
     </div>
   </div>
 
-  <!-- FIREBASE -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-  <!-- SCRIPTS -->
   <script src="js/config.js"></script>
   <script src="js/core.js"></script>
   <script src="js/auth.js"></script>
 
   <script>
-    /**
-     * Helpers de UI exclusivos do index.html.
-     * Funções de autenticação (autenticar, autenticarEquipe, autenticarComPIN)
-     * e todos os listeners de teclado estão em js/auth.js.
-     * NÃO adicionar lógica de autenticação ou listeners duplicados aqui.
-     */
-
-    // Troca de abas
+    // Tab switching
     function switchTab(tab) {
       document.querySelectorAll('.login-tab').forEach(el => el.style.display = 'none');
       document.querySelectorAll('[id$="Tab"]').forEach(el => el.style.borderBottomColor = 'transparent');
-
+      
       document.getElementById(tab + 'Tab').style.display = 'block';
       document.getElementById('tab' + (tab === 'master' ? 'Master' : tab === 'equipe' ? 'Equipe' : 'Pin')).style.borderBottomColor = 'var(--brand)';
-
-      if (tab === 'master')       document.getElementById('usr')?.focus();
-      else if (tab === 'equipe')  document.getElementById('usrEquipe')?.focus();
-      else                        document.getElementById('usrPin')?.focus();
+      
+      // Clear fields and autofocus
+      if (tab === 'master') {
+        document.getElementById('usr')?.focus();
+      } else if (tab === 'equipe') {
+        document.getElementById('usrEquipe')?.focus();
+      } else {
+        document.getElementById('usrPin')?.focus();
+      }
     }
 
-    // Toggle visibilidade senha — aba Master
+    // Toggle password visibility
     function _togglePwd() {
       const pwd = document.getElementById('pwd');
       const btn = document.getElementById('pwdToggle');
-      if (!pwd || !btn) return;
       pwd.type = pwd.type === 'password' ? 'text' : 'password';
       btn.textContent = pwd.type === 'password' ? '👁' : '🙈';
     }
 
-    // Toggle visibilidade senha — aba Equipe
     function _togglePwdEquipe() {
       const pwd = document.getElementById('pwdEquipe');
       const btn = document.getElementById('pwdToggleEquipe');
-      if (!pwd || !btn) return;
       pwd.type = pwd.type === 'password' ? 'text' : 'password';
       btn.textContent = pwd.type === 'password' ? '👁' : '🙈';
     }
+
+    // Key Listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      sessionStorage.clear();
+
+      // PIN input - only numbers
+      const pinInput = document.getElementById('pinInput');
+      if (pinInput) {
+        pinInput.addEventListener('input', (e) => {
+          e.target.value = e.target.value.replace(/[^\d]/g, '').slice(0, 4);
+        });
+        pinInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') window.autenticarComPIN();
+        });
+      }
+
+      // Enter keys routing
+      document.getElementById('pwd')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') window.autenticar();
+      });
+      document.getElementById('usr')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('pwd')?.focus();
+      });
+
+      document.getElementById('pwdEquipe')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') window.autenticarEquipe();
+      });
+      document.getElementById('usrEquipe')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('pwdEquipe')?.focus();
+      });
+
+      document.getElementById('usrPin')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('pinInput')?.focus();
+      });
+
+      // Apply brand
+      try {
+        const b = JSON.parse(sessionStorage.getItem('j_brand') || 'null');
+        if (b) window.aplicarBrand(b);
+      } catch (e) {}
+    });
   </script>
 </body>
 </html>
