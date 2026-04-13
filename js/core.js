@@ -56,7 +56,7 @@ window.initCore = function() {
   }
 
   // Aplicar brand do tenant
-  if (J.brand) window.aplicarBrand(J.brand);
+  if (J.brand && window.aplicarBrand) window.aplicarBrand(J.brand);
 
   // Popular UI base
   _populateBaseUI();
@@ -81,7 +81,7 @@ window.initCoreEquipe = function() {
     window.location.replace('index.html');
     return;
   }
-  if (J.brand) window.aplicarBrand(J.brand);
+  if (J.brand && window.aplicarBrand) window.aplicarBrand(J.brand);
   _escutarOS();
   _escutarClientes();
   _escutarVeiculos();
@@ -125,7 +125,7 @@ function _escutarClientes() {
     .onSnapshot(snap => {
       J.clientes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (window.renderClientes) renderClientes();
-      popularSelects();
+      if (window.popularSelects) popularSelects();
     });
 }
 
@@ -135,7 +135,7 @@ function _escutarVeiculos() {
     .onSnapshot(snap => {
       J.veiculos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (window.renderVeiculos) renderVeiculos();
-      popularSelects();
+      if (window.popularSelects) popularSelects();
     });
 }
 
@@ -166,7 +166,7 @@ function _escutarEquipe() {
       J.equipe = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (window.renderEquipe)  renderEquipe();
       if (window.calcComissoes) calcComissoes();
-      popularSelects();
+      if (window.popularSelects) popularSelects();
     });
 }
 
@@ -176,7 +176,7 @@ function _escutarFornecedores() {
     .onSnapshot(snap => {
       J.fornecedores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (window.renderFornecedores) renderFornecedores();
-      popularSelects();
+      if (window.popularSelects) popularSelects();
     });
 }
 
@@ -263,7 +263,7 @@ window.popularSelects = function() {
   });
 
   const mOpts = '<option value="">Não atribuído</option>' +
-    J.equipe.map(f => `<option value="${f.id}">${f.nome} — ${JARVIS_CONST.CARGOS[f.cargo] || f.cargo}</option>`).join('');
+    J.equipe.map(f => `<option value="${f.id}">${f.nome} — ${window.JARVIS_CONST && JARVIS_CONST.CARGOS ? (JARVIS_CONST.CARGOS[f.cargo] || f.cargo) : f.cargo}</option>`).join('');
 
   ['osMec', 'agdMec'].forEach(id => {
     const el = document.getElementById(id);
@@ -350,6 +350,9 @@ window.randId = (n = 6) => Math.random().toString(36).slice(-n).toUpperCase();
 
 window.sair = function() {
   sessionStorage.clear();
+  if (window.firebase) {
+    firebase.auth().signOut().catch(()=>{});
+  }
   window.location.href = 'index.html';
 };
 
