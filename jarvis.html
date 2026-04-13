@@ -3,360 +3,183 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>JARVIS ERP — Dashboard</title>
+  <title>JARVIS ERP — Painel de Gestão</title>
+  
   <link rel="stylesheet" href="css/design.css">
+  
+  <style>
+    /* Ajustes finos para garantir que nada saia do lugar */
+    .kanban-board { display: flex; gap: 16px; padding: 20px; overflow-x: auto; min-height: calc(100vh - 120px); }
+    .kanban-col { flex: 0 0 320px; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; }
+    .kanban-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .kanban-list { padding: 12px; flex: 1; min-height: 100px; }
+    
+    /* Indicador de LED para OS Atrasada */
+    .led-alert { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: blink 1s infinite; }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+  </style>
 </head>
-<body onload="initCore()">
-  <div id="toast-container"></div>
+<body class="dark-theme">
 
-  <!-- SIDEBAR -->
-  <div style="display:flex;height:100vh">
-    <div style="width:250px;background:var(--bg-secondary);border-right:1px solid var(--border);overflow-y:auto;padding:var(--spacing-lg)">
-      <div style="margin-bottom:var(--spacing-2xl)">
-        <div style="width:48px;height:48px;background:linear-gradient(135deg,var(--brand),var(--brand-dark));border-radius:var(--r-lg);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;color:white;margin-bottom:var(--spacing-md)">J</div>
-        <div style="font-weight:700;font-size:var(--fs-sm)" id="sbTenantNome">Oficina</div>
-        <div style="font-size:var(--fs-xs);color:var(--text-muted)" id="sbUserNome">Usuário</div>
+  <div class="app-container">
+    
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-mark">J</div>
+        <span class="brand-name" id="sbTenantNome">Oficina</span>
       </div>
-
-      <nav style="display:flex;flex-direction:column;gap:var(--spacing-sm)">
-        <a href="#" onclick="showSection('dashboard')" class="nav-item" style="padding:var(--spacing-md);border-radius:var(--r-md);text-decoration:none;color:var(--text-secondary);transition:var(--transition)">📊 Dashboard</a>
-        <a href="#" onclick="showSection('kanban')" class="nav-item" style="padding:var(--spacing-md);border-radius:var(--r-md);text-decoration:none;color:var(--text-secondary);transition:var(--transition)">📋 Ordens de Serviço</a>
-        <a href="#" onclick="showSection('financeiro')" class="nav-item" style="padding:var(--spacing-md);border-radius:var(--r-md);text-decoration:none;color:var(--text-secondary);transition:var(--transition)">💰 Financeiro</a>
-        <a href="#" onclick="showSection('ia')" class="nav-item" style="padding:var(--spacing-md);border-radius:var(--r-md);text-decoration:none;color:var(--text-secondary);transition:var(--transition)">🤖 IA Assistente</a>
-        <a href="#" onclick="showSection('estoque')" class="nav-item" style="padding:var(--spacing-md);border-radius:var(--r-md);text-decoration:none;color:var(--text-secondary);transition:var(--transition)">📦 Estoque</a>
-        <a href="#" onclick="showSection('clientes')" class="nav-item" style="padding:var(--spacing-md);border-radius:var(--r-md);text-decoration:none;color:var(--text-secondary);transition:var(--transition)">👥 Clientes</a>
-        <a href="#" onclick="showSection('equipe')" class="nav-item" style="padding:var(--spacing-md);border-radius:var(--r-md);text-decoration:none;color:var(--text-secondary);transition:var(--transition)">👨‍💼 Equipe</a>
+      
+      <nav class="sidebar-nav">
+        <button class="nav-item active" onclick="showTab('kanban')">📋 Painel O.S.</button>
+        <button class="nav-item" onclick="showTab('clientes')">👥 Clientes</button>
+        <button class="nav-item" onclick="showTab('veiculos')">🚗 Veículos</button>
+        <button class="nav-item" onclick="showTab('estoque')">📦 Estoque</button>
+        <button class="nav-item" onclick="showTab('financeiro')">💰 Financeiro</button>
+        <button class="nav-item" onclick="showTab('equipe')">🛠️ Equipe</button>
       </nav>
 
-      <div style="margin-top:var(--spacing-2xl);padding-top:var(--spacing-lg);border-top:1px solid var(--border)">
-        <button class="btn btn-ghost btn-full" onclick="fazerLogout()" style="justify-content:flex-start">🚪 Sair</button>
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="avatar" id="sbAvatar">U</div>
+          <div class="user-meta">
+            <div class="user-name" id="sbUserNome">Usuário</div>
+            <div class="user-role" id="sbUserRole">MASTER</div>
+          </div>
+        </div>
+        <button class="btn-logout" onclick="sair()">Sair</button>
       </div>
-    </div>
+    </aside>
 
-    <!-- MAIN CONTENT -->
-    <div style="flex:1;overflow-y:auto;background:var(--bg-primary)">
-      <!-- TOPBAR -->
-      <div style="background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:var(--spacing-lg);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100">
-        <div style="font-size:var(--fs-lg);font-weight:700" id="topTitle">Dashboard</div>
-        <div style="display:flex;gap:var(--spacing-md);align-items:center">
-          <span style="font-size:var(--fs-sm);color:var(--text-muted)">Bem-vindo, <strong id="sbUserRole">ADMIN</strong></span>
-          <div style="width:36px;height:36px;background:var(--brand);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:var(--fs-lg)" id="sbAvatar">J</div>
+    <main class="main-content">
+      
+      <header class="topbar">
+        <div class="topbar-left">
+          <h2 id="pageTitle">Quadro de Serviços</h2>
         </div>
-      </div>
-
-      <!-- SECTIONS -->
-      <div style="padding:var(--spacing-2xl)">
-        <!-- DASHBOARD -->
-        <div id="dashboardSection" class="section">
-          <h1 style="margin-bottom:var(--spacing-xl)">📊 Dashboard</h1>
-          <div id="dashboardContainer"></div>
-        </div>
-
-        <!-- KANBAN -->
-        <div id="kanbanSection" class="section" style="display:none">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-xl)">
-            <h1>📋 Ordens de Serviço</h1>
-            <button class="btn btn-brand" onclick="prepOS();openModal('modalOS')">+ Nova O.S.</button>
-          </div>
-          <div id="kanbanContainer"></div>
-        </div>
-
-        <!-- FINANCEIRO -->
-        <div id="financeiroSection" class="section" style="display:none">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-xl)">
-            <h1>💰 Financeiro</h1>
-            <div style="display:flex;gap:var(--spacing-md)">
-              <button class="btn btn-brand" onclick="prepFin();openModal('modalFin')">+ Lançamento</button>
-              <button class="btn btn-primary" onclick="prepNF();openModal('modalNF')">📄 NF Entrada</button>
-            </div>
-          </div>
-
-          <!-- DRE -->
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--spacing-lg);margin-bottom:var(--spacing-2xl)">
-            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--spacing-lg)">
-              <div style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:var(--spacing-sm)">ENTRADAS</div>
-              <div style="font-size:var(--fs-2xl);font-weight:700;color:var(--success)" id="dreEntradas">R$ 0,00</div>
-            </div>
-            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--spacing-lg)">
-              <div style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:var(--spacing-sm)">SAÍDAS</div>
-              <div style="font-size:var(--fs-2xl);font-weight:700;color:var(--danger)" id="dreSaidas">R$ 0,00</div>
-            </div>
-            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--spacing-lg)">
-              <div style="font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:var(--spacing-sm)">SALDO</div>
-              <div style="font-size:var(--fs-2xl);font-weight:700" id="dreSaldo">R$ 0,00</div>
-            </div>
-          </div>
-
-          <!-- TABELA -->
-          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
-            <table>
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Tipo</th>
-                  <th>Descrição</th>
-                  <th>Forma</th>
-                  <th>Valor</th>
-                  <th>Status</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="tbFinanceiro"></tbody>
-            </table>
+        <div class="topbar-actions">
+          <label class="btn btn-ghost" style="cursor: pointer;">
+            📥 Importar XML NFe
+            <input type="file" id="inputXML" accept=".xml" style="display:none" onchange="importarXMLNFe(this.files[0])">
+          </label>
+          
+          <button class="btn btn-brand" onclick="abrirModalOS()">+ Nova O.S.</button>
+          <div class="notification-bell">
+            🔔 <span class="badge" id="chatBadge">0</span>
           </div>
         </div>
+      </header>
 
-        <!-- IA -->
-        <div id="iaSection" class="section" style="display:none">
-          <h1 style="margin-bottom:var(--spacing-xl)">🤖 IA Assistente</h1>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--spacing-lg);margin-bottom:var(--spacing-xl)">
-            <button class="btn btn-primary btn-full" onclick="iaAnalisarDRE()" style="justify-content:center">📊 Analisar DRE</button>
-            <button class="btn btn-primary btn-full" onclick="iaAnalisarEstoque()" style="justify-content:center">📦 Analisar Estoque</button>
+      <section id="view-kanban" class="view-section active">
+        <div class="kanban-board" id="kanbanBoard">
           </div>
-          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--spacing-lg);height:400px;display:flex;flex-direction:column">
-            <div id="iaMsgs" style="flex:1;overflow-y:auto;margin-bottom:var(--spacing-lg);display:flex;flex-direction:column;gap:var(--spacing-md)"></div>
-            <div style="display:flex;gap:var(--spacing-sm)">
-              <input class="input" id="iaInput" type="text" placeholder="Faça uma pergunta...">
-              <button class="btn btn-brand" onclick="iaPerguntar()">Enviar</button>
-            </div>
+      </section>
+
+      <section id="view-estoque" class="view-section">
+        <div class="toolbar">
+           <input type="text" class="input" placeholder="Buscar peça..." oninput="filtrarEstoque(this.value)">
+           <button class="btn btn-brand" onclick="abrirModalPeca()">+ Adicionar Peça</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Quantidade</th>
+                <th>Custo</th>
+                <th>Venda</th>
+                <th>NFe</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="listaEstoque"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-financeiro" class="view-section">
+        <div class="financeiro-grid">
+          <div class="fin-card-stat">
+            <span>Receitas (Pagas)</span>
+            <h3 id="finResumoReceita">R$ 0,00</h3>
+          </div>
+          <div class="fin-card-stat">
+            <span>Despesas (Pagas)</span>
+            <h3 id="finResumoDespesa">R$ 0,00</h3>
+          </div>
+          <div class="fin-card-stat highlight">
+            <span>Saldo Real</span>
+            <h3 id="finResumoSaldo">R$ 0,00</h3>
+          </div>
+          <div class="fin-card-stat">
+            <span>A Receber (Pendentes)</span>
+            <h3 id="finResumoPendente">R$ 0,00</h3>
           </div>
         </div>
+        <div class="fin-list-container" id="listaFinanceiro"></div>
+      </section>
 
-        <!-- ESTOQUE -->
-        <div id="estoqueSection" class="section" style="display:none">
-          <h1 style="margin-bottom:var(--spacing-xl)">📦 Estoque</h1>
-          <button class="btn btn-brand" onclick="prepEstoque();openModal('modalEstoque')" style="margin-bottom:var(--spacing-lg)">+ Novo Item</button>
-          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
-            <table>
-              <thead>
-                <tr>
-                  <th>Descrição</th>
-                  <th>Qtd</th>
-                  <th>Mín</th>
-                  <th>Custo</th>
-                  <th>Venda</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="tbEstoque"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- CLIENTES -->
-        <div id="clientesSection" class="section" style="display:none">
-          <h1 style="margin-bottom:var(--spacing-xl)">👥 Clientes</h1>
-          <button class="btn btn-brand" onclick="prepCliente();openModal('modalCliente')" style="margin-bottom:var(--spacing-lg)">+ Novo Cliente</button>
-          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Email</th>
-                  <th>Telefone</th>
-                  <th>CPF</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="tbClientes"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- EQUIPE -->
-        <div id="equipeSection" class="section" style="display:none">
-          <h1 style="margin-bottom:var(--spacing-xl)">👨‍💼 Equipe</h1>
-          <button class="btn btn-brand" onclick="prepEquipe();openModal('modalEquipe')" style="margin-bottom:var(--spacing-lg)">+ Novo Funcionário</button>
-          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Cargo</th>
-                  <th>Email</th>
-                  <th>Telefone</th>
-                  <th>Comissão</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="tbEquipe"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
+    </main>
   </div>
 
-  <!-- MODALS -->
-  <div id="modalOS" class="modal">
+  <div class="modal" id="modalFaturar">
     <div class="modal-content">
-      <div class="modal-header">Ordem de Serviço</div>
-      <input type="hidden" id="osId">
-      <div class="form-group">
-        <label class="form-label">Cliente</label>
-        <select class="input" id="osCliente" onchange="filtrarVeiculosOS()"></select>
+      <div class="modal-header">
+        <h3>Finalizar e Faturar O.S.</h3>
+        <button class="close-btn" onclick="closeModal('modalFaturar')">&times;</button>
       </div>
-      <div class="form-group">
-        <label class="form-label">Veículo</label>
-        <select class="input" id="osVeiculo"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Mecânico</label>
-        <select class="input" id="osMec"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Descrição</label>
-        <textarea class="input" id="osDesc" style="min-height:100px"></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Valor Total</label>
-        <input class="input" id="osTotal" type="number" step="0.01">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Data</label>
-        <input class="input" id="osData" type="date">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        <select class="input" id="osStatus"></select>
+      <div class="modal-body">
+        <p>Valor Total: <strong id="faturarValorTotal">R$ 0,00</strong></p>
+        <div class="form-group">
+          <label>Forma de Pagamento</label>
+          <select class="input" id="faturarMetodo">
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Pix">Pix</option>
+            <option value="Cartão de Crédito">Cartão de Crédito</option>
+            <option value="Cartão de Débito">Cartão de Débito</option>
+            <option value="Boleto">Boleto</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Número de Parcelas (1 a 24)</label>
+          <input type="number" class="input" id="faturarParcelas" value="1" min="1" max="24">
+        </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modalOS')">Cancelar</button>
-        <button class="btn btn-brand" id="btnSalvarOS" onclick="salvarOS()">Salvar</button>
+        <button class="btn btn-ghost" onclick="closeModal('modalFaturar')">Cancelar</button>
+        <button class="btn btn-brand" id="btnConfirmarFaturar">Confirmar Faturamento</button>
       </div>
     </div>
   </div>
 
-  <div id="modalFin" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">Lançamento Financeiro</div>
-      <input type="hidden" id="finId">
-      <div class="form-group">
-        <label class="form-label">Tipo</label>
-        <select class="input" id="finTipo">
-          <option value="Entrada">Entrada</option>
-          <option value="Saída">Saída</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Descrição</label>
-        <input class="input" id="finDesc" type="text">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Valor</label>
-        <input class="input" id="finValor" type="number" step="0.01">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Forma de Pagamento</label>
-        <select class="input" id="finPgto"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Vencimento</label>
-        <input class="input" id="finVenc" type="date">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        <select class="input" id="finStatus">
-          <option value="Pago">Pago</option>
-          <option value="Pendente">Pendente</option>
-        </select>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modalFin')">Cancelar</button>
-        <button class="btn btn-brand" id="btnSalvarFin" onclick="salvarFin()">Salvar</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modalNF" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">Entrada de NF</div>
-      <div class="form-group">
-        <label class="form-label">Número NF</label>
-        <input class="input" id="nfNumero" type="text">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Fornecedor</label>
-        <select class="input" id="nfFornec"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Data</label>
-        <input class="input" id="nfData" type="date">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Vencimento</label>
-        <input class="input" id="nfVenc" type="date">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Forma de Pagamento</label>
-        <select class="input" id="nfPgtoForma" onchange="checkPgtoNF()">
-          <option value="Dinheiro">Dinheiro</option>
-          <option value="PIX">PIX</option>
-          <option value="Boleto">Boleto</option>
-          <option value="Parcelado">Parcelado</option>
-        </select>
-      </div>
-      <div id="divParcelasNF" class="form-group hidden">
-        <label class="form-label">Número de Parcelas</label>
-        <input class="input" id="nfParcelas" type="number" value="1" min="1" max="12">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Itens</label>
-        <div id="containerItensNF"></div>
-        <button type="button" class="btn btn-ghost btn-full" onclick="adicionarItemNF()" style="margin-top:var(--spacing-md)">+ Adicionar Item</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Total</label>
-        <div style="font-size:var(--fs-xl);font-weight:700;color:var(--success)" id="nfTotal">0,00</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modalNF')">Cancelar</button>
-        <button class="btn btn-brand" id="btnSalvarNF" onclick="salvarNF()">FINALIZAR ENTRADA</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- FIREBASE -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-  <!-- SCRIPTS -->
   <script src="js/config.js"></script>
   <script src="js/core.js"></script>
-  <script src="js/auth.js"></script>
+  <script src="js/ui.js"></script>
   <script src="js/os.js"></script>
   <script src="js/financeiro.js"></script>
   <script src="js/ia.js"></script>
+  <script src="js/pdf.js"></script>
 
   <script>
-    function showSection(section) {
-      document.querySelectorAll('.section').forEach(el => el.style.display = 'none');
-      document.getElementById(section + 'Section').style.display = 'block';
-      
-      const titles = {
-        dashboard: '📊 Dashboard',
-        kanban: '📋 Ordens de Serviço',
-        financeiro: '💰 Financeiro',
-        ia: '🤖 IA Assistente',
-        estoque: '📦 Estoque',
-        clientes: '👥 Clientes',
-        equipe: '👨‍💼 Equipe'
-      };
-      document.getElementById('topTitle').textContent = titles[section] || 'Dashboard';
-    }
-
-    // Populate selects
+    // Inicialização do Sistema
     document.addEventListener('DOMContentLoaded', () => {
-      const statusOpts = JARVIS_CONST.STATUS_OS.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
-      document.getElementById('osStatus').innerHTML = statusOpts;
-
-      const pgtoOpts = JARVIS_CONST.FORMAS_PGTO.map(p => `<option value="${p.value}">${p.label}</option>`).join('');
-      document.getElementById('finPgto').innerHTML = pgtoOpts;
-
-      renderDashboard();
-      renderKanban();
-      renderFinanceiro();
+      window.initCore(); // Função sagrada do seu core.js
     });
+
+    // Troca de Abas
+    function showTab(tabId) {
+      document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      
+      const target = document.getElementById('view-' + tabId);
+      if (target) target.classList.add('active');
+      
+      const titles = { kanban: 'Quadro de Serviços', clientes: 'Gestão de Clientes', veiculos: 'Frota de Veículos', estoque: 'Controle de Estoque', financeiro: 'Fluxo de Caixa', equipe: 'Gestão de Equipe' };
+      document.getElementById('pageTitle').textContent = titles[tabId] || 'JARVIS';
+    }
   </script>
 </body>
 </html>
