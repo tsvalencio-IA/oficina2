@@ -1,12 +1,13 @@
 /**
- * JARVIS ERP — core.js
+ * JARVIS ERP V2 — core.js
  * Estado global, listeners Firestore, utilitários
+ * Namespace: window.J (INVIOLÁVEL)
  */
 
 'use strict';
 
 // ============================================================
-// NAMESPACE GLOBAL
+// NAMESPACE GLOBAL — INVIOLÁVEL
 // ============================================================
 window.J = {
   // SESSÃO
@@ -23,18 +24,19 @@ window.J = {
   comissao:    parseFloat(sessionStorage.getItem('j_comissao') || '0'),
 
   // ESTADO IN-MEMORY
-  os:           [],
-  clientes:     [],
-  veiculos:     [],
-  estoque:      [],
-  financeiro:   [],
-  equipe:       [],
-  fornecedores: [],
-  agendamentos: [],
-  mensagens:    [],
-  chatEquipe:   [],
-  auditoria:    [],
-  chatAtivo:    null,
+  os:              [],
+  clientes:        [],
+  veiculos:        [],
+  estoque:         [],
+  financeiro:      [],
+  equipe:          [],
+  fornecedores:    [],
+  agendamentos:    [],
+  mensagens:       [],
+  chatEquipe:      [],
+  auditoria:       [],
+  conhecimentoIA:  [],
+  chatAtivo:       null,
 
   // DB REFERENCE (preenchido em initCore)
   db: null
@@ -70,6 +72,7 @@ window.initCore = function() {
   _escutarMensagens();
   _escutarAgendamentos();
   _escutarAuditoria();
+  _escutarConhecimentoIA();
 };
 
 window.initCoreEquipe = function() {
@@ -103,7 +106,7 @@ function _populateBaseUI() {
 }
 
 // ============================================================
-// LISTENERS
+// LISTENERS FIRESTORE
 // ============================================================
 function _escutarOS() {
   J.db.collection('ordens_servico')
@@ -186,7 +189,6 @@ function _escutarMensagens() {
         .sort((a, b) => (a.ts || 0) - (b.ts || 0));
       if (window.renderChatLista) renderChatLista();
       if (J.chatAtivo && window.renderChatMsgs) renderChatMsgs(J.chatAtivo);
-      // Badge
       const unread = J.mensagens.filter(m => m.sender === 'cliente' && !m.lidaAdmin).length;
       const badge = document.getElementById('chatBadge');
       if (badge) {
@@ -216,7 +218,15 @@ function _escutarAuditoria() {
     });
 }
 
-// Chat equipe↔admin (equipe.html)
+function _escutarConhecimentoIA() {
+  J.db.collection('conhecimento_ia')
+    .where('tenantId', '==', J.tid)
+    .onSnapshot(snap => {
+      J.conhecimentoIA = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (window.renderConhecimentoIA) renderConhecimentoIA();
+    });
+}
+
 function _escutarChatEquipe() {
   J.db.collection('chat_equipe')
     .where('tenantId', '==', J.tid)
@@ -348,4 +358,60 @@ window.abrirWpp = function(numero, msg) {
   const n = (numero || '').replace(/\D/g, '');
   const url = `https://wa.me/55${n}?text=${encodeURIComponent(msg || '')}`;
   window.open(url, '_blank');
+};
+
+// Toast notifications
+window.toastOk = function(msg) {
+  _showToast(msg, 'success');
+};
+
+window.toastWarn = function(msg) {
+  _showToast(msg, 'warning');
+};
+
+window.toastErr = function(msg) {
+  _showToast(msg, 'error');
+};
+
+function _showToast(msg, type) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// Modal helpers
+window.openModal = function(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('show');
+};
+
+window.closeModal = function(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('show');
+};
+
+// Loading state
+window.setLoading = function(id, loading, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.disabled = loading;
+  if (loading) {
+    el.dataset.originalText = el.textContent;
+    el.innerHTML = '<span class="spinner"></span> Processando...';
+  } else {
+    el.textContent = text || el.dataset.originalText || 'Salvar';
+  }
 };
