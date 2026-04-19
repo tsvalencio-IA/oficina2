@@ -160,7 +160,15 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
 .toast-j.err { border-color: var(--danger); color: var(--danger); }
 .toast-j.warn { border-color: var(--warn); color: var(--warn); }
 
-.j-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--brand); border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.tab-btn.obd-tab.active { color:#22D3A0; border-bottom-color:#22D3A0; background:rgba(34,211,160,0.08); }
+.obd-gauge { background:var(--surf-2); border:1px solid var(--border); border-radius:var(--r-lg); padding:16px; text-align:center; }
+.obd-gauge-val { font-family:var(--ff-display); font-size:2rem; font-weight:800; color:white; line-height:1; }
+.obd-gauge-unit { font-family:var(--ff-mono); font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+.obd-gauge-lbl { font-family:var(--ff-mono); font-size:0.6rem; color:var(--brand); letter-spacing:1px; margin-bottom:8px; text-transform:uppercase; }
+.dtc-card { background:var(--surf-1); border:1px solid var(--border); border-left:4px solid var(--danger); border-radius:var(--r-md); padding:16px; margin-bottom:10px; }
+.dtc-card.pending { border-left-color:var(--warn); }
+.dtc-code { font-family:var(--ff-mono); font-size:1.1rem; font-weight:700; color:var(--danger); margin-bottom:4px; }
+.dtc-card.pending .dtc-code { color:var(--warn); }
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
 </style>
 </head>
@@ -206,6 +214,7 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
       <button class="tab-btn" onclick="switchCliTab('tabFin',this)">💳 EXTRATO</button>
       <button class="tab-btn" onclick="switchCliTab('tabAgd',this)">📅 AGENDAR</button>
       <button class="tab-btn ia-tab" onclick="switchCliTab('tabIA',this)">🤖 thIAguinho</button>
+      <button class="tab-btn obd-tab" onclick="switchCliTab('tabOBD',this)">🔌 SCANNER OBD</button>
     </div>
   </div>
 
@@ -273,10 +282,39 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
         </div>
       </div>
     </div>
-  </div>
-</div>
-
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <!-- ABA SCANNER OBD -->
+    <div id="tabOBD" class="tab-content">
+      <div id="obdStatusBar" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--surf-1);border:1px solid var(--border);border-radius:var(--r-xl);margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div id="obdLed" style="width:12px;height:12px;border-radius:50%;background:var(--text-muted);box-shadow:none;transition:0.4s;"></div>
+          <div>
+            <div style="font-family:var(--ff-display);font-weight:700;font-size:1rem;color:white;" id="obdStatusLabel">Desconectado</div>
+            <div style="font-family:var(--ff-mono);font-size:0.6rem;color:var(--text-muted);" id="obdDeviceName">Nenhum dispositivo</div>
+          </div>
+        </div>
+        <button id="btnObdConnect" onclick="obdToggleConnect()" class="btn btn-brand" style="width:auto;padding:10px 20px;font-size:0.8rem;">🔌 CONECTAR</button>
+      </div>
+      <div id="obdIosWarn" style="display:none;padding:14px;background:var(--warn-dim);border:1px solid var(--warn);border-radius:var(--r-md);margin-bottom:16px;font-family:var(--ff-mono);font-size:0.75rem;color:var(--warn);">⚠ iOS/Safari não suporta Web Bluetooth. Use Chrome ou Edge no Android ou Desktop.</div>
+      <div id="obdActions" style="display:none;margin-bottom:20px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <button class="btn btn-outline" style="font-size:0.8rem;padding:12px;" onclick="obdReadDTCs()">🔍 LER ERROS</button>
+          <button class="btn btn-danger" style="font-size:0.8rem;padding:12px;" onclick="obdClearDTCs()">🧹 LIMPAR ERROS</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <button class="btn" style="background:var(--ia-dim);border:1px solid rgba(167,139,250,0.3);color:var(--ia-color);font-size:0.8rem;padding:12px;" id="btnObdLive" onclick="obdToggleLive()">📡 DADOS AO VIVO</button>
+          <button class="btn btn-outline" style="font-size:0.8rem;padding:12px;" onclick="obdFullScan()">📋 VARREDURA COMPLETA</button>
+        </div>
+      </div>
+      <div id="obdDtcArea" style="margin-bottom:20px;"></div>
+      <div id="obdLiveArea" style="display:none;margin-bottom:20px;">
+        <div style="font-family:var(--ff-display);font-size:1.1rem;font-weight:700;color:white;margin-bottom:14px;display:flex;align-items:center;gap:8px;">📡 Dados em Tempo Real <span style="font-family:var(--ff-mono);font-size:0.6rem;padding:3px 10px;border-radius:10px;background:var(--danger);color:white;">● AO VIVO</span></div>
+        <div id="obdGauges" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"></div>
+      </div>
+      <div style="background:var(--surf-1);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;">
+        <div style="padding:12px 16px;background:var(--surf-2);border-bottom:1px solid var(--border);font-family:var(--ff-mono);font-size:0.65rem;color:var(--brand);letter-spacing:2px;">TERMINAL OBD</div>
+        <div id="obdLog" style="padding:12px 16px;font-family:var(--ff-mono);font-size:0.72rem;color:var(--text-muted);max-height:200px;overflow-y:auto;line-height:1.8;"><div>Aguardando conexão...</div></div>
+      </div>
+    </div>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="js/config.js?v=99"></script>
 <script>
@@ -952,7 +990,192 @@ async function _recusarOrcamento(osId) {
   } catch(e){toast('Erro ao recusar: '+e.message,'err');}
 }
 
-/* Powered by thIAguinho Soluções Digitais */
+<script src="elm327-service.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────
+// 🔌 SCANNER OBD — Integração com elm327-service.js
+// ─────────────────────────────────────────────────────────────
+let _obdConnected = false;
+let _obdLiveActive = false;
+
+// Detecta iOS
+if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+  document.getElementById('obdIosWarn').style.display = 'block';
+}
+
+// Callbacks do ELM327
+elm327.onLog((msg, type) => {
+  const log = document.getElementById('obdLog');
+  if (!log) return;
+  const color = type==='ok'?'var(--success)':type==='warn'?'var(--warn)':type==='err'?'var(--danger)':'var(--text-muted)';
+  const ts = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  log.innerHTML += `<div style="color:${color}">[<span style="color:var(--brand)">${ts}</span>] ${_esc(msg)}</div>`;
+  log.scrollTop = log.scrollHeight;
+});
+
+elm327.onConnect(({ device }) => {
+  _obdConnected = true;
+  _obdSetStatus(true, device);
+  document.getElementById('obdActions').style.display = 'block';
+  toast('ELM327 conectado: ' + device, 'ok');
+});
+
+elm327.onDisconnect(() => {
+  _obdConnected = false;
+  _obdLiveActive = false;
+  _obdSetStatus(false);
+  document.getElementById('obdActions').style.display = 'none';
+  document.getElementById('obdLiveArea').style.display = 'none';
+  document.getElementById('btnObdLive').textContent = '📡 DADOS AO VIVO';
+  toast('ELM327 desconectado', 'warn');
+});
+
+elm327.onLiveData((data) => { _renderGauges(data); });
+
+function _obdSetStatus(connected, deviceName) {
+  const led = document.getElementById('obdLed');
+  const label = document.getElementById('obdStatusLabel');
+  const dev = document.getElementById('obdDeviceName');
+  const btn = document.getElementById('btnObdConnect');
+  if (connected) {
+    led.style.background = 'var(--success)'; led.style.boxShadow = '0 0 10px var(--success)';
+    label.textContent = 'Conectado'; dev.textContent = deviceName || 'ELM327';
+    btn.textContent = '🔌 DESCONECTAR'; btn.style.cssText = 'width:auto;padding:10px 20px;font-size:0.8rem;background:var(--danger-dim);border:1px solid var(--danger);color:var(--danger);border-radius:var(--r-md);font-family:var(--ff-display);font-weight:700;cursor:pointer;letter-spacing:1px;';
+  } else {
+    led.style.background = 'var(--text-muted)'; led.style.boxShadow = 'none';
+    label.textContent = 'Desconectado'; dev.textContent = 'Nenhum dispositivo';
+    btn.textContent = '🔌 CONECTAR'; btn.className = 'btn btn-brand'; btn.style.cssText = 'width:auto;padding:10px 20px;font-size:0.8rem;';
+  }
+}
+
+async function obdToggleConnect() {
+  if (_obdConnected) {
+    await elm327.disconnect();
+  } else {
+    if (!navigator.bluetooth) { toast('Web Bluetooth não disponível. Use Chrome/Edge.', 'err'); return; }
+    try { await elm327.connect(); } catch (e) { toast('Erro ao conectar: ' + e.message, 'err'); }
+  }
+}
+
+async function obdReadDTCs() {
+  if (!_obdConnected) { toast('Conecte o ELM327 primeiro.', 'warn'); return; }
+  toast('Lendo códigos de erro…', 'warn');
+  try {
+    const [confirmed, pending] = await Promise.all([elm327.readDTCs(), elm327.readPendingDTCs()]);
+    const all = [...confirmed, ...pending.map(d=>({...d, status:'Pendente'}))];
+    _renderDTCs(all);
+    await _salvarDTCsNoFirebase(all);
+    // Envia contexto para IA
+    if (all.length > 0) iaHistorico.push({ role:'user', text:`[SCANNER OBD] DTCs detectados: ${all.map(d=>d.code+' — '+d.description).join(' | ')}` });
+    toast(all.length===0 ? '✅ Nenhum erro encontrado!' : `⚠ ${all.length} código(s) encontrado(s)`, all.length===0 ? 'ok' : 'warn');
+  } catch (e) { toast('Erro ao ler DTCs: ' + e.message, 'err'); }
+}
+
+async function obdClearDTCs() {
+  if (!_obdConnected) { toast('Conecte o ELM327 primeiro.', 'warn'); return; }
+  if (!confirm('Tem certeza? Isso apaga os códigos de erro da memória da ECU.')) return;
+  try {
+    const result = await elm327.clearDTCs();
+    toast(result.success ? '✅ DTCs apagados!' : '⚠ Falha ao apagar DTCs', result.success ? 'ok' : 'warn');
+    if (result.success) document.getElementById('obdDtcArea').innerHTML = '';
+  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+function obdToggleLive() {
+  if (!_obdConnected) { toast('Conecte o ELM327 primeiro.', 'warn'); return; }
+  const btn = document.getElementById('btnObdLive');
+  const area = document.getElementById('obdLiveArea');
+  if (_obdLiveActive) {
+    elm327.stopLiveData(); _obdLiveActive = false;
+    btn.textContent = '📡 DADOS AO VIVO'; area.style.display = 'none';
+    toast('Monitoramento parado', 'warn');
+  } else {
+    elm327.startLiveData(['rpm','speed','temp','throttle','fuel','voltage'], 1000);
+    _obdLiveActive = true; btn.textContent = '⏹ PARAR'; area.style.display = 'block';
+    toast('Monitoramento ao vivo iniciado!', 'ok');
+  }
+}
+
+async function obdFullScan() {
+  if (!_obdConnected) { toast('Conecte o ELM327 primeiro.', 'warn'); return; }
+  toast('Varredura completa em andamento…', 'warn');
+  try {
+    const scan = await elm327.fullScan();
+    _renderDTCs([...scan.dtcs, ...scan.pending]);
+    if (Object.values(scan.live).some(v=>v!==null)) { _renderGauges(scan.live); document.getElementById('obdLiveArea').style.display = 'block'; }
+    await _salvarScanNoFirebase(scan);
+    // Injeta resultado no contexto da IA automaticamente
+    const dtcResumo = scan.dtcs.length===0 ? 'Nenhum DTC detectado' : scan.dtcs.map(d=>d.code+' ('+d.description+')').join(', ');
+    iaHistorico.push({ role:'user', text:`[VARREDURA OBD COMPLETA] Adaptador: ${scan.device} | DTCs: ${dtcResumo} | RPM: ${scan.live.rpm??'—'} | Temp: ${scan.live.temp??'—'}°C | Bateria: ${scan.live.voltage??'—'}V` });
+    toast('Varredura completa! Pergunte ao thIAguinho os resultados.', 'ok');
+  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+function _renderDTCs(dtcs) {
+  const area = document.getElementById('obdDtcArea');
+  if (dtcs.length===0) {
+    area.innerHTML=`<div style="text-align:center;padding:32px;background:var(--surf-1);border-radius:var(--r-xl);border:1px dashed var(--border);"><div style="font-size:2rem;margin-bottom:8px">✅</div><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:var(--success);">Nenhum código de erro!</div><div style="font-size:0.85rem;color:var(--text-muted);margin-top:6px;">Veículo sem falhas detectadas.</div></div>`;
+    return;
+  }
+  const SEV = {Alto:'var(--danger)',Médio:'var(--warn)',Baixo:'var(--brand)'};
+  area.innerHTML = `<div style="font-family:var(--ff-display);font-size:1.1rem;font-weight:700;color:white;margin-bottom:14px;">⚠ ${dtcs.length} Código(s) Detectado(s)</div>`
+    + dtcs.map(d=>`<div class="dtc-card ${d.status==='Pendente'?'pending':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div class="dtc-code">${_esc(d.code)}</div>
+        <div style="display:flex;gap:6px;">
+          <span style="font-family:var(--ff-mono);font-size:0.6rem;padding:3px 8px;border-radius:10px;background:${SEV[d.severity]||'var(--text-muted)'};color:#000;font-weight:700;">${d.severity}</span>
+          <span style="font-family:var(--ff-mono);font-size:0.6rem;padding:3px 8px;border-radius:10px;background:var(--surf-3);color:var(--text-muted);">${d.status}</span>
+        </div>
+      </div>
+      <div style="font-size:0.9rem;color:var(--text-primary);margin-bottom:10px;">${_esc(d.description)}</div>
+      <button onclick="switchCliTab('tabIA',document.querySelectorAll('.tab-btn')[4]);iaChipClick('Me explique o código ${d.code} e como resolver')" style="background:var(--ia-dim);border:1px solid rgba(167,139,250,0.2);color:var(--ia-color);font-family:var(--ff-mono);font-size:0.65rem;padding:6px 12px;border-radius:var(--r-md);cursor:pointer;letter-spacing:1px;">
+        🤖 PERGUNTAR AO thIAguinho
+      </button>
+    </div>`).join('');
+}
+
+function _renderGauges(data) {
+  const area = document.getElementById('obdGauges'); if(!area) return;
+  const LABELS = {
+    rpm:      {label:'RPM',         unit:'rpm',  color:'var(--brand)'},
+    speed:    {label:'VELOCIDADE',  unit:'km/h', color:'var(--success)'},
+    temp:     {label:'TEMP.MOTOR',  unit:'°C',   color:'var(--danger)'},
+    throttle: {label:'ACELERADOR', unit:'%',    color:'var(--warn)'},
+    fuel:     {label:'COMBUSTÍVEL', unit:'%',    color:'var(--success)'},
+    voltage:  {label:'BATERIA',     unit:'V',    color:'var(--brand)'},
+    maf:      {label:'FLUXO MAF',   unit:'g/s',  color:'var(--ia-color)'},
+    intakeTemp:{label:'TEMP.ADMIS.',unit:'°C',   color:'var(--warn)'},
+  };
+  area.innerHTML = Object.entries(data)
+    .filter(([k,v])=>k!=='timestamp'&&v!==null&&LABELS[k])
+    .map(([k,v])=>{
+      const l=LABELS[k]; const val=typeof v==='number'?v.toFixed(v>100?0:1):(v??'--');
+      return `<div class="obd-gauge">
+        <div class="obd-gauge-lbl" style="color:${l.color}">${l.label}</div>
+        <div class="obd-gauge-val" style="color:${l.color}">${val}</div>
+        <div class="obd-gauge-unit">${l.unit}</div>
+      </div>`;
+    }).join('');
+}
+
+async function _salvarDTCsNoFirebase(dtcs) {
+  if (!P.tenantId || !P.osDoCliente?.length) return;
+  const osAtiva = P.osDoCliente.find(o=>!['Entregue','Cancelado','entregue','cancelado'].includes(o.status));
+  if (!osAtiva) return;
+  try {
+    const tl = [...(osAtiva.timeline||[])];
+    const resumo = dtcs.length===0 ? 'Scanner OBD: nenhum código detectado' : `Scanner OBD: ${dtcs.length} código(s) — ${dtcs.map(d=>d.code).join(', ')}`;
+    tl.push({dt:new Date().toISOString(), user:P.cliente?.nome||'Cliente (App)', acao:resumo});
+    await db.collection('ordens_servico').doc(osAtiva.id).update({dtcsCliente:dtcs, dtcsTs:new Date().toISOString(), timeline:tl, updatedAt:new Date().toISOString()});
+  } catch(e) { console.warn('Não salvou DTCs:', e); }
+}
+
+async function _salvarScanNoFirebase(scan) {
+  if (!P.tenantId || !P.osDoCliente?.length) return;
+  const osAtiva = P.osDoCliente.find(o=>!['Entregue','Cancelado','entregue','cancelado'].includes(o.status));
+  if (!osAtiva) return;
+  try {
+    await db.collection('ordens_servico').doc(osAtiva.id).update({obdScan:scan, updatedAt:new Date().toISOString()});
+  } catch(e) { console.warn('Não salvou scan:', e); }
+}
 </script>
-</body>
-</html>
