@@ -125,6 +125,15 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
 .extrato-item.Pendente { border-left-color: var(--danger); }
 .extrato-item.Pago { border-left-color: var(--success); }
 
+/* --- CSS DOS CARDS PREMIUM DO OBD --- */
+.dash-card { background: var(--surf-1); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+.dash-card-icon { width: 48px; height: 48px; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+.dash-card-info { flex: 1; margin-left: 16px; }
+.dash-card-title { font-family: var(--ff-mono); font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.dash-card-val { font-family: var(--ff-display); font-size: 1.4rem; font-weight: 700; color: white; }
+.fuel-bar-bg { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 12px; overflow: hidden; }
+.fuel-bar-fill { height: 100%; background: var(--brand); transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+
 #toastBox { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; max-width: calc(100vw - 40px); }
 .toast-j { padding: 14px 20px; border-radius: var(--r-md); font-family: var(--ff-mono); font-size: 0.8rem; border-left: 4px solid; background: #111; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; transition: 0.4s; }
 .toast-j.ok { border-color: var(--success); color: var(--success); }
@@ -259,6 +268,42 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
           <button class="btn btn-outline" style="font-size:0.8rem;padding:12px;" onclick="obdVarredura()">📋 VARREDURA COMPLETA</button>
         </div>
       </div>
+      
+      <div id="obdHealthDash" style="display:none; flex-direction:column; gap:12px; margin-bottom:20px;">
+        <div class="dash-card">
+            <div class="dash-card-icon" style="background:var(--success-dim);color:var(--success)">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            </div>
+            <div class="dash-card-info">
+                <div class="dash-card-title">Status do Motor</div>
+                <div class="dash-card-val" id="dashMotorStatus" style="color:var(--success)">Normal</div>
+            </div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon" style="background:var(--warn-dim);color:var(--warn)">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <div class="dash-card-info">
+                <div class="dash-card-title">Próxima Revisão</div>
+                <div class="dash-card-val" id="dashRevStatus">Calculando...</div>
+            </div>
+        </div>
+        <div class="dash-card" style="display:block;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center;">
+                    <div class="dash-card-icon" style="background:var(--brand-dim);color:var(--brand)">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 22h18"></path><path d="M4 9h16"></path><path d="M4 22V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v18"></path><path d="M14 13h2"></path><path d="M14 17h2"></path></svg>
+                    </div>
+                    <div class="dash-card-info">
+                        <div class="dash-card-title">Nível de Combustível</div>
+                        <div class="dash-card-val" id="dashFuelVal">--%</div>
+                    </div>
+                </div>
+            </div>
+            <div class="fuel-bar-bg"><div class="fuel-bar-fill" id="dashFuelBar" style="width: 0%; background: var(--brand)"></div></div>
+        </div>
+      </div>
+      
       <div id="obdDTCs" style="margin-bottom:16px;"></div>
       <div id="obdLive" style="display:none;margin-bottom:16px;">
         <div style="font-family:var(--ff-display);font-size:1rem;font-weight:700;color:white;margin-bottom:10px;">📡 Ao Vivo <span style="font-family:var(--ff-mono);font-size:0.6rem;background:var(--danger);color:white;padding:2px 8px;border-radius:10px;">● LIVE</span></div>
@@ -447,7 +492,11 @@ function _renderPortalOS(osList) {
   content.innerHTML = osList.map(os => {
     let statusLimpo = STATUS_MAP_LEGACY[os.status] || (os.status||'patio').toLowerCase();
     if(!STEPS.includes(statusLimpo) && statusLimpo !== 'cancelado') statusLimpo = 'patio';
-    const statusIdx = STEPS.indexOf(statusLimpo); const isConcluida = (statusLimpo === 'pronto' || statusLimpo === 'entregue' || statusLimpo === 'faturado'); const isOrcamento = (statusLimpo === 'aprovacao'); const isCancelada = (statusLimpo === 'cancelado');
+    const statusIdx = STEPS.indexOf(statusLimpo); 
+    const isConcluida = (statusLimpo === 'pronto' || statusLimpo === 'entregue' || statusLimpo === 'faturado'); 
+    const isEntregue = (statusLimpo === 'entregue' || statusLimpo === 'faturado');
+    const isOrcamento = (statusLimpo === 'aprovacao'); 
+    const isCancelada = (statusLimpo === 'cancelado');
 
     const v = P.veiculos.find(x => x.id === os.veiculoId) || {};
 
@@ -474,7 +523,13 @@ function _renderPortalOS(osList) {
     const placaFormatada = placaLimpa.length === 7 ? `${placaLimpa.slice(0,3)}-${placaLimpa.slice(3)}` : (placaLimpa || 'S/PLACA');
 
     const kmExibicao = os.km ? Number(os.km).toLocaleString('pt-BR') : (v.km ? Number(v.km).toLocaleString('pt-BR') : '--');
-    const stepperHTML = isCancelada ? `<div style="text-align:center;padding:24px;color:var(--danger);font-weight:700;font-family:var(--ff-display);font-size:1.4rem;">🚫 CANCELADA</div>` : `<div class="stepper-wrap"><div class="stepper"><div class="step-line"></div><div class="step-line-fill" style="width:${Math.max(0, (statusIdx / (STEPS.length-1)) * 90)}%"></div>${STEPS.map((s, i) => `<div class="step ${i < statusIdx ? 'done' : i === statusIdx ? 'active' : ''}"><div class="step-dot">${i < statusIdx ? '✓' : i+1}</div><div class="step-lbl">${STEP_LABELS[s]}</div></div>`).join('')}</div></div>`;
+    
+    // Matemática do Stepper corrigida (x 100)
+    const stepperHTML = isCancelada ? `<div style="text-align:center;padding:24px;color:var(--danger);font-weight:700;font-family:var(--ff-display);font-size:1.4rem;">🚫 CANCELADA</div>` : `<div class="stepper-wrap"><div class="stepper"><div class="step-line"></div><div class="step-line-fill" style="width:${Math.max(0, (statusIdx / (STEPS.length-1)) * 100)}%"></div>${STEPS.map((s, i) => `<div class="step ${i < statusIdx ? 'done' : i === statusIdx ? 'active' : ''}"><div class="step-dot">${i < statusIdx ? '✓' : i+1}</div><div class="step-lbl">${STEP_LABELS[s]}</div></div>`).join('')}</div></div>`;
+    
+    // Banner Entregue Premium
+    const bannerEntregue = isEntregue ? `<div style="margin: 20px; padding: 16px; background: linear-gradient(135deg, var(--success-dim), transparent); border-left: 4px solid var(--success); border-radius: 0 var(--r-md) var(--r-md) 0;"><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:var(--success);margin-bottom:6px">Veículo Entregue</div><div style="font-size:0.9rem;color:white;">Serviço finalizado. Agradecemos a confiança!</div></div>` : '';
+    
     const orcAlerta = isOrcamento ? `<div class="alerta-orcamento"><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:var(--warn);margin-bottom:6px">Orçamento Disponível</div><div style="font-size:0.9rem;color:white;margin-bottom:16px">Valor estimado: <strong style="font-size:1.3rem;">${formatter.format(os.total || 0)}</strong></div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success" style="flex:1;" onclick="_aprovarOrcamento('${os.id}')">✓ APROVAR</button><button class="btn btn-outline" style="flex:1;" onclick="_negociarOrcamento('${placaFormatada}')">💬 NEGOCIAR</button></div></div>` : '';
 
     const timelineHtml = `
@@ -513,7 +568,7 @@ function _renderPortalOS(osList) {
         <div style="padding:14px 20px; background:var(--surf-2); border-bottom:1px solid var(--border); font-size:0.85rem; color:var(--text-primary); display:flex; justify-content:space-between; align-items:center;">
           <div><strong style="color:white">${v.modelo || os.veiculo || 'Veículo'}</strong></div><div style="font-family:var(--ff-mono);font-size:0.6rem;color:var(--text-muted)">OS #${os.id.slice(-6).toUpperCase()}</div>
         </div>
-        ${stepperHTML}${orcAlerta}${revisaoHTML}${badgeHistorico}
+        ${stepperHTML}${bannerEntregue}${orcAlerta}${revisaoHTML}${badgeHistorico}
         <button class="btn-toggle-detalhes" onclick="this.closest('.os-card').classList.toggle('expanded')">▼ VER DETALHAMENTO E HISTÓRICO DA OS</button>
         ${detalheHtml}
       </div>`;
@@ -828,6 +883,7 @@ async function _recusarOrcamento(osId) {
 // ── IA thIAguinho E CÉREBRO AI-ENGINE ──────────────────────────────────────────
 let _iaHist = [];
 let _osDoCliente = [];
+window._ultimosDTCsLidos = []; // Armazena estado global para o dashboard de Saúde
 
 // Base de Dados Injetada do ai-engine.js (Inteligência Offline e Contexto)
 const _dtcDatabase = {
@@ -873,7 +929,7 @@ async function iaEnviar() {
   // Construção do Contexto Inteligente Extraindo Variáveis Reais
   let ctx = `Cliente: ${P?.cliente?.nome || '—'} | Oficina: ${P?.oficina?.nomeFantasia || '—'}\n`;
   let kmDoCliente = 0;
-  let activeDTCs = [];
+  let activeDTCs = [...window._ultimosDTCsLidos];
   
   (_osDoCliente.length ? _osDoCliente : (P?.osDoCliente || [])).forEach(o => {
     const kmNum = parseFloat(String(o.km || '0').replace(/\D/g, ''));
@@ -1009,7 +1065,7 @@ function _iaReplace(id, html) {
   document.getElementById('iaMsgs').scrollTop = 99999;
 }
 
-// ── INTEGRAÇÃO OBD2 ROBUSTA (ELM327-SERVICE.JS) ──────────────────────────────────────────
+// ── INTEGRAÇÃO OBD2 ROBUSTA (ELM327-SERVICE.JS) E DASHBOARD ──────────────────────────
 function _obdLog(msg, cor) {
   const el = document.getElementById('obdLog'); if(!el) return;
   const ts = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -1046,6 +1102,7 @@ if (obdScanner) {
               document.getElementById('btnObd').className = 'btn btn-brand';
               document.getElementById('obdAcoes').style.display = 'none';
               document.getElementById('obdLive').style.display = 'none';
+              document.getElementById('obdHealthDash').style.display = 'none';
               toast(errMsg ? `Erro: ${errMsg}` : 'ELM327 desconectado', 'warn');
               _obdLog('Scanner desconectado do veículo.', 'var(--warn)');
           }
@@ -1082,6 +1139,7 @@ if (obdScanner) {
           document.getElementById('btnObd').className = 'btn btn-brand';
           document.getElementById('obdAcoes').style.display = 'none';
           document.getElementById('obdLive').style.display = 'none';
+          document.getElementById('obdHealthDash').style.display = 'none';
           toast('ELM327 desconectado', 'warn');
       });
       obdScanner.onLiveData(data => _obdRenderGauges(data));
@@ -1111,6 +1169,7 @@ async function obdLerDTCs() {
         todos = await obdScanner.readDTCs();
     }
     
+    window._ultimosDTCsLidos = todos.map(d => d.code || d); // Grava para o Dashboard de Saúde
     _obdRenderDTCs(todos);
     _obdSalvarFirebase(todos);
     
@@ -1135,6 +1194,7 @@ async function obdLimparDTCs() {
     toast(success ? '✅ DTCs apagados!' : '⚠ Falha ao apagar', success?'ok':'warn');
     if (success) {
         document.getElementById('obdDTCs').innerHTML = '';
+        window._ultimosDTCsLidos = []; // Limpa dashboard
         _obdLog('Memória de falhas limpa com sucesso.', 'var(--success)');
     }
   } catch(e) { toast('Erro: ' + e.message, 'err'); }
@@ -1150,6 +1210,7 @@ function obdToggleLive() {
     _liveOn = false;
     document.getElementById('btnLive').textContent = '📡 DADOS AO VIVO';
     document.getElementById('obdLive').style.display = 'none';
+    document.getElementById('obdHealthDash').style.display = 'none';
     _obdLog('Leitura contínua interrompida.', 'var(--text-muted)');
   } else {
     if(typeof obdScanner.startMonitoring === 'function') obdScanner.startMonitoring(1000);
@@ -1179,6 +1240,7 @@ async function obdVarredura() {
         if(typeof obdScanner.readLiveData === 'function') liveData = await obdScanner.readLiveData();
     }
 
+    window._ultimosDTCsLidos = dtcs.map(d => d.code || d); // Grava para o Dashboard de Saúde
     _obdRenderDTCs(dtcs);
     if (liveData && Object.values(liveData).some(v=>v!==null)) {
       _obdRenderGauges(liveData);
@@ -1217,9 +1279,63 @@ function _obdRenderDTCs(dtcs) {
 }
 
 function _obdRenderGauges(data) {
+  // Mostra o Dashboard de Saúde Premium (Baseado no thIAguinho-assistente-main)
+  const healthDash = document.getElementById('obdHealthDash');
+  if (healthDash) {
+      healthDash.style.display = 'flex';
+      
+      // Card 1: Status do Motor (Lido da Varredura)
+      const motorEl = document.getElementById('dashMotorStatus');
+      const motorIcon = motorEl.parentElement.previousElementSibling;
+      const dtcsLidos = window._ultimosDTCsLidos || [];
+      if (dtcsLidos.length > 0) {
+          motorEl.textContent = `${dtcsLidos.length} Falha(s)`;
+          motorEl.style.color = 'var(--danger)';
+          motorIcon.style.background = 'var(--danger-dim)';
+          motorIcon.style.color = 'var(--danger)';
+          motorIcon.innerHTML = `<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+      } else {
+          motorEl.textContent = 'Normal';
+          motorEl.style.color = 'var(--success)';
+          motorIcon.style.background = 'var(--success-dim)';
+          motorIcon.style.color = 'var(--success)';
+          motorIcon.innerHTML = `<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+      }
+
+      // Card 2: Próxima Revisão
+      const revEl = document.getElementById('dashRevStatus');
+      const osAtiva = (_osDoCliente.length ? _osDoCliente : (P?.osDoCliente || [])).find(o=>!['Entregue','Cancelado','entregue','cancelado'].includes(o.status)) || (_osDoCliente.length ? _osDoCliente[0] : null);
+      if (osAtiva && osAtiva.proxRev) {
+          const dtRev = new Date(osAtiva.proxRev);
+          const hoje = new Date();
+          const diffDias = Math.ceil((dtRev - hoje) / (1000 * 60 * 60 * 24));
+          if (diffDias < 0) { revEl.textContent = 'Atrasada'; revEl.style.color = 'var(--danger)'; }
+          else if (diffDias === 0) { revEl.textContent = 'Hoje'; revEl.style.color = 'var(--warn)'; }
+          else { revEl.textContent = `Em ${diffDias} dias`; revEl.style.color = 'white'; }
+      } else if (osAtiva && osAtiva.proxKm) {
+          revEl.textContent = `Aos ${Number(osAtiva.proxKm).toLocaleString('pt-BR')} KM`;
+          revEl.style.color = 'white';
+      } else {
+          revEl.textContent = 'Em dia';
+          revEl.style.color = 'var(--success)';
+      }
+
+      // Card 3: Nível de Combustível (Barra animada)
+      const fuelLvl = data.fuelLevel !== undefined ? data.fuelLevel : (data.fuel !== undefined ? data.fuel : null);
+      if (fuelLvl !== null) {
+          document.getElementById('dashFuelVal').textContent = `${fuelLvl.toFixed(1)}%`;
+          const bar = document.getElementById('dashFuelBar');
+          bar.style.width = `${Math.min(100, Math.max(0, fuelLvl))}%`;
+          if (fuelLvl <= 15) bar.style.background = 'var(--danger)';
+          else if (fuelLvl <= 40) bar.style.background = 'var(--warn)';
+          else bar.style.background = 'var(--success)';
+      }
+  }
+
+  // Renderiza Gauges Menores Tradicionais
   const el = document.getElementById('obdGauges'); if(!el) return;
   const L = { rpm:{l:'RPM',u:'rpm',c:'var(--brand)'}, speed:{l:'VELOCIDADE',u:'km/h',c:'var(--success)'}, temp:{l:'TEMP.MOTOR',u:'°C',c:'var(--danger)'}, temperature:{l:'TEMP.MOTOR',u:'°C',c:'var(--danger)'}, throttle:{l:'ACELERADOR',u:'%',c:'var(--warn)'}, fuel:{l:'COMBUSTÍVEL',u:'%',c:'var(--success)'}, fuelLevel:{l:'COMBUSTÍVEL',u:'%',c:'var(--success)'}, voltage:{l:'BATERIA',u:'V',c:'var(--brand)'} };
-  el.innerHTML = Object.entries(data).filter(([k,v])=>k!=='timestamp'&&v!==null&&L[k]).map(([k,v])=>{
+  el.innerHTML = Object.entries(data).filter(([k,v])=>k!=='timestamp'&&v!==null&&L[k]&&k!=='fuel'&&k!=='fuelLevel').map(([k,v])=>{
     const i=L[k]; const val=typeof v==='number'?v.toFixed(v>100?0:1):'--';
     return `<div style="background:var(--surf-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;text-align:center;">
       <div style="font-family:var(--ff-mono);font-size:0.55rem;color:${i.c};letter-spacing:1px;margin-bottom:6px;">${i.l}</div>
