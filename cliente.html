@@ -125,7 +125,7 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
 .extrato-item.Pendente { border-left-color: var(--danger); }
 .extrato-item.Pago { border-left-color: var(--success); }
 
-/* --- CSS DOS CARDS PREMIUM DO OBD --- */
+/* --- CSS DOS CARDS PREMIUM DO OBD E VIAGEM --- */
 .dash-card { background: var(--surf-1); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 .dash-card-icon { width: 48px; height: 48px; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
 .dash-card-info { flex: 1; margin-left: 16px; }
@@ -133,6 +133,12 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
 .dash-card-val { font-family: var(--ff-display); font-size: 1.4rem; font-weight: 700; color: white; }
 .fuel-bar-bg { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 12px; overflow: hidden; }
 .fuel-bar-fill { height: 100%; background: var(--brand); transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+
+.trip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.trip-card { background: var(--surf-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px; text-align: center; }
+.trip-icon { font-size: 1.2rem; margin-bottom: 4px; }
+.trip-title { font-family: var(--ff-mono); font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.trip-val { font-family: var(--ff-display); font-size: 1.2rem; font-weight: 700; color: white; margin-top: 4px; }
 
 #toastBox { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; max-width: calc(100vw - 40px); }
 .toast-j { padding: 14px 20px; border-radius: var(--r-md); font-family: var(--ff-mono); font-size: 0.8rem; border-left: 4px solid; background: #111; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; transition: 0.4s; }
@@ -308,6 +314,32 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
       <div id="obdLive" style="display:none;margin-bottom:16px;">
         <div style="font-family:var(--ff-display);font-size:1rem;font-weight:700;color:white;margin-bottom:10px;">📡 Ao Vivo <span style="font-family:var(--ff-mono);font-size:0.6rem;background:var(--danger);color:white;padding:2px 8px;border-radius:10px;">● LIVE</span></div>
         <div id="obdGauges" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+        
+        <div id="obdTripDash" style="display:none;">
+            <div style="font-family:var(--ff-display);font-size:1rem;font-weight:700;color:white;margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">🚗 Estatísticas de Viagem</div>
+            <div class="trip-grid">
+                <div class="trip-card">
+                    <div class="trip-icon">📏</div>
+                    <div class="trip-title">Distância</div>
+                    <div class="trip-val" id="tripDist">0.00 km</div>
+                </div>
+                <div class="trip-card">
+                    <div class="trip-icon">⏱️</div>
+                    <div class="trip-title">Tempo de Viagem</div>
+                    <div class="trip-val" id="tripTime">0m 0s</div>
+                </div>
+                <div class="trip-card">
+                    <div class="trip-icon">⛽</div>
+                    <div class="trip-title">Consumo Médio</div>
+                    <div class="trip-val" id="tripFuel">-- km/l</div>
+                </div>
+                <div class="trip-card">
+                    <div class="trip-icon">💰</div>
+                    <div class="trip-title">Custo Estimado</div>
+                    <div class="trip-val" id="tripCost">R$ 0,00</div>
+                </div>
+            </div>
+        </div>
       </div>
       <div style="background:var(--surf-1);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;">
         <div style="padding:10px 16px;background:var(--surf-2);font-family:var(--ff-mono);font-size:0.65rem;color:var(--brand);letter-spacing:2px;">TERMINAL OBD</div>
@@ -480,7 +512,7 @@ function _iniciarPortalListeners() {
   }
 }
 
-// 🚘 RENDERIZAÇÃO DAS O.S. (COM HISTÓRICO DE AUDITORIA PREMIUM)
+// 🚘 RENDERIZAÇÃO DAS O.S. (COM HISTÓRICO DE AUDITORIA PREMIUM E CORREÇÃO DE STATUS 100%)
 function _renderPortalOS(osList) {
   const content = document.getElementById('renderOSArea');
   const STEPS = ['patio', 'orcamento', 'aprovacao', 'box', 'pronto', 'faturado', 'entregue'];
@@ -490,13 +522,16 @@ function _renderPortalOS(osList) {
   if (!osList.length) { content.innerHTML = `<div style="text-align:center;padding:48px 20px;background:var(--surf-1);border-radius:var(--r-xl);border:1px dashed var(--border);"><div style="font-size:3rem;margin-bottom:16px">🚘</div><div style="font-family:var(--ff-display);font-size:1.3rem;font-weight:700;color:white">Nenhum veículo no pátio</div></div>`; return; }
 
   content.innerHTML = osList.map(os => {
-    let statusLimpo = STATUS_MAP_LEGACY[os.status] || (os.status||'patio').toLowerCase();
+    let statusLimpo = STATUS_MAP_LEGACY[os.status] || String(os.status||'patio').toLowerCase();
     if(!STEPS.includes(statusLimpo) && statusLimpo !== 'cancelado') statusLimpo = 'patio';
+    
     const statusIdx = STEPS.indexOf(statusLimpo); 
-    const isConcluida = (statusLimpo === 'pronto' || statusLimpo === 'entregue' || statusLimpo === 'faturado'); 
-    const isEntregue = (statusLimpo === 'entregue' || statusLimpo === 'faturado');
-    const isOrcamento = (statusLimpo === 'aprovacao'); 
     const isCancelada = (statusLimpo === 'cancelado');
+    const isOrcamento = (statusLimpo === 'aprovacao'); 
+    
+    // Matemática e Lógica rígida para garantir que a O.S "Entregue" complete o Stepper
+    const isEntregue = (statusLimpo === 'entregue' || statusLimpo === 'faturado' || String(os.status).toLowerCase() === 'entregue');
+    const isConcluida = (statusLimpo === 'pronto' || isEntregue); 
 
     const v = P.veiculos.find(x => x.id === os.veiculoId) || {};
 
@@ -524,11 +559,17 @@ function _renderPortalOS(osList) {
 
     const kmExibicao = os.km ? Number(os.km).toLocaleString('pt-BR') : (v.km ? Number(v.km).toLocaleString('pt-BR') : '--');
     
-    // Matemática do Stepper corrigida (x 100)
-    const stepperHTML = isCancelada ? `<div style="text-align:center;padding:24px;color:var(--danger);font-weight:700;font-family:var(--ff-display);font-size:1.4rem;">🚫 CANCELADA</div>` : `<div class="stepper-wrap"><div class="stepper"><div class="step-line"></div><div class="step-line-fill" style="width:${Math.max(0, (statusIdx / (STEPS.length-1)) * 100)}%"></div>${STEPS.map((s, i) => `<div class="step ${i < statusIdx ? 'done' : i === statusIdx ? 'active' : ''}"><div class="step-dot">${i < statusIdx ? '✓' : i+1}</div><div class="step-lbl">${STEP_LABELS[s]}</div></div>`).join('')}</div></div>`;
+    // Matemática do Stepper corrigida e garantida em 100% no fim
+    // Calculo: (índice atual / índice total) * 100
+    // Como tem 7 passos, o índice máximo é 6. 6/6 * 100 = 100%.
+    const fillPercent = isEntregue ? 100 : Math.max(0, (statusIdx / (STEPS.length - 1)) * 100);
     
-    // Banner Entregue Premium
-    const bannerEntregue = isEntregue ? `<div style="margin: 20px; padding: 16px; background: linear-gradient(135deg, var(--success-dim), transparent); border-left: 4px solid var(--success); border-radius: 0 var(--r-md) var(--r-md) 0;"><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:var(--success);margin-bottom:6px">Veículo Entregue</div><div style="font-size:0.9rem;color:white;">Serviço finalizado. Agradecemos a confiança!</div></div>` : '';
+    const stepperHTML = isCancelada 
+        ? `<div style="text-align:center;padding:24px;color:var(--danger);font-weight:700;font-family:var(--ff-display);font-size:1.4rem;">🚫 CANCELADA</div>` 
+        : `<div class="stepper-wrap"><div class="stepper"><div class="step-line"></div><div class="step-line-fill" style="width:${fillPercent}%"></div>${STEPS.map((s, i) => `<div class="step ${(i < statusIdx || isEntregue) ? 'done' : i === statusIdx ? 'active' : ''}"><div class="step-dot">${(i < statusIdx || isEntregue) ? '✓' : i+1}</div><div class="step-lbl">${STEP_LABELS[s]}</div></div>`).join('')}</div></div>`;
+    
+    // Banner Entregue Premium injetado logo após o stepper
+    const bannerEntregueHtml = isEntregue ? `<div style="margin: 20px; padding: 16px; background: linear-gradient(135deg, var(--success-dim), transparent); border-left: 4px solid var(--success); border-radius: 0 var(--r-md) var(--r-md) 0;"><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:var(--success);margin-bottom:6px">✅ Veículo Entregue</div><div style="font-size:0.9rem;color:white;">Serviço finalizado. Agradecemos a confiança!</div></div>` : '';
     
     const orcAlerta = isOrcamento ? `<div class="alerta-orcamento"><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:var(--warn);margin-bottom:6px">Orçamento Disponível</div><div style="font-size:0.9rem;color:white;margin-bottom:16px">Valor estimado: <strong style="font-size:1.3rem;">${formatter.format(os.total || 0)}</strong></div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success" style="flex:1;" onclick="_aprovarOrcamento('${os.id}')">✓ APROVAR</button><button class="btn btn-outline" style="flex:1;" onclick="_negociarOrcamento('${placaFormatada}')">💬 NEGOCIAR</button></div></div>` : '';
 
@@ -568,7 +609,7 @@ function _renderPortalOS(osList) {
         <div style="padding:14px 20px; background:var(--surf-2); border-bottom:1px solid var(--border); font-size:0.85rem; color:var(--text-primary); display:flex; justify-content:space-between; align-items:center;">
           <div><strong style="color:white">${v.modelo || os.veiculo || 'Veículo'}</strong></div><div style="font-family:var(--ff-mono);font-size:0.6rem;color:var(--text-muted)">OS #${os.id.slice(-6).toUpperCase()}</div>
         </div>
-        ${stepperHTML}${bannerEntregue}${orcAlerta}${revisaoHTML}${badgeHistorico}
+        ${stepperHTML}${bannerEntregueHtml}${orcAlerta}${revisaoHTML}${badgeHistorico}
         <button class="btn-toggle-detalhes" onclick="this.closest('.os-card').classList.toggle('expanded')">▼ VER DETALHAMENTO E HISTÓRICO DA OS</button>
         ${detalheHtml}
       </div>`;
@@ -885,6 +926,9 @@ let _iaHist = [];
 let _osDoCliente = [];
 window._ultimosDTCsLidos = []; // Armazena estado global para o dashboard de Saúde
 
+// Motor Estatístico de Viagem
+let _tripData = { active: false, startTime: 0, distanceKm: 0, fuelLiters: 0, cost: 0, pricePerLiter: 5.80, lastTime: 0 };
+
 // Base de Dados Injetada do ai-engine.js (Inteligência Offline e Contexto)
 const _dtcDatabase = {
     'P0171': { description: 'Sistema muito pobre (Banco 1)', severity: 'Médio', urgency: 'Moderada', causes: ['Filtro de ar sujo', 'Sensor MAF defeituoso', 'Vazamento no sistema de admissão', 'Bomba de combustível fraca', 'Injetores entupidos'] },
@@ -1077,6 +1121,45 @@ if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
   document.getElementById('obdWarnIOS').style.display = 'block';
 }
 
+// Lógica Trip Engine: processar estatísticas de viagem baseada em velocidade/rpm/tempo
+function _updateTripData(data) {
+    if(!_tripData.active) return;
+    const now = Date.now();
+    const diffHours = (now - _tripData.lastTime) / 3600000;
+    const speed = data.speed || 0;
+    const rpm = data.rpm || 0;
+
+    // Cálculo do Consumo em km/l (baseado em speed e rpm como simplificação comum do ELM327)
+    let kml = 0;
+    if (speed > 0 && rpm > 0) { kml = (speed / (rpm / 1000)) * 0.8; }
+    else if (speed > 0) { kml = 10; }
+
+    // Atualização cumulativa
+    if (speed > 0) {
+        const distInc = speed * diffHours;
+        _tripData.distanceKm += distInc;
+        if(kml > 0) { _tripData.fuelLiters += (distInc / kml); }
+    }
+    
+    _tripData.cost = _tripData.fuelLiters * _tripData.pricePerLiter;
+    _tripData.lastTime = now;
+
+    // Atualiza HTML do painel de viagem
+    const elDist = document.getElementById('tripDist');
+    const elTime = document.getElementById('tripTime');
+    const elFuel = document.getElementById('tripFuel');
+    const elCost = document.getElementById('tripCost');
+
+    if (elDist) elDist.textContent = _tripData.distanceKm.toFixed(2) + ' km';
+    if (elTime) {
+        const elapsedMin = Math.floor((now - _tripData.startTime) / 60000);
+        const elapsedSec = Math.floor(((now - _tripData.startTime) % 60000) / 1000);
+        elTime.textContent = `${elapsedMin}m ${elapsedSec}s`;
+    }
+    if (elFuel) elFuel.textContent = kml > 0 ? kml.toFixed(1) + ' km/l' : '--';
+    if (elCost) elCost.textContent = 'R$ ' + _tripData.cost.toFixed(2).replace('.', ',');
+}
+
 // Mapeamento dinâmico para suportar a classe ELM327Service injetada
 const obdScanner = typeof elm327Service !== 'undefined' ? elm327Service : (typeof elm327 !== 'undefined' ? elm327 : null);
 
@@ -1103,6 +1186,7 @@ if (obdScanner) {
               document.getElementById('obdAcoes').style.display = 'none';
               document.getElementById('obdLive').style.display = 'none';
               document.getElementById('obdHealthDash').style.display = 'none';
+              document.getElementById('obdTripDash').style.display = 'none';
               toast(errMsg ? `Erro: ${errMsg}` : 'ELM327 desconectado', 'warn');
               _obdLog('Scanner desconectado do veículo.', 'var(--warn)');
           }
@@ -1111,6 +1195,7 @@ if (obdScanner) {
       obdScanner.onDataReceived((payload) => {
           if (payload && payload.type === 'liveData') {
               _obdRenderGauges(payload.data);
+              _updateTripData(payload.data);
           } else {
               _obdLog(payload, 'var(--text-primary)');
           }
@@ -1140,9 +1225,13 @@ if (obdScanner) {
           document.getElementById('obdAcoes').style.display = 'none';
           document.getElementById('obdLive').style.display = 'none';
           document.getElementById('obdHealthDash').style.display = 'none';
+          document.getElementById('obdTripDash').style.display = 'none';
           toast('ELM327 desconectado', 'warn');
       });
-      obdScanner.onLiveData(data => _obdRenderGauges(data));
+      obdScanner.onLiveData(data => {
+          _obdRenderGauges(data);
+          _updateTripData(data);
+      });
   }
 }
 
@@ -1208,17 +1297,21 @@ function obdToggleLive() {
     else if(typeof obdScanner.stopLiveData === 'function') obdScanner.stopLiveData();
     
     _liveOn = false;
+    _tripData.active = false;
     document.getElementById('btnLive').textContent = '📡 DADOS AO VIVO';
     document.getElementById('obdLive').style.display = 'none';
     document.getElementById('obdHealthDash').style.display = 'none';
+    document.getElementById('obdTripDash').style.display = 'none';
     _obdLog('Leitura contínua interrompida.', 'var(--text-muted)');
   } else {
     if(typeof obdScanner.startMonitoring === 'function') obdScanner.startMonitoring(1000);
     else if(typeof obdScanner.startLiveData === 'function') obdScanner.startLiveData(['rpm','speed','temp','throttle','fuel','voltage'], 1000);
     
     _liveOn = true;
+    _tripData = { active: true, startTime: Date.now(), distanceKm: 0, fuelLiters: 0, cost: 0, pricePerLiter: 5.80, lastTime: Date.now() }; // Inicia Trip Engine
     document.getElementById('btnLive').textContent = '⏹ PARAR';
     document.getElementById('obdLive').style.display = 'block';
+    document.getElementById('obdTripDash').style.display = 'block';
     _obdLog('Iniciando leitura contínua de sensores (PIDs)...', 'var(--brand)');
   }
 }
