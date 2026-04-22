@@ -351,11 +351,11 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
           </div>
         </div>
         <div style="padding:10px 14px;border-bottom:1px solid rgba(167,139,250,0.1);display:flex;gap:8px;flex-wrap:wrap;background:rgba(0,0,0,0.1);">
-          <span onclick="iaChip('Como resolver o código P0300?')" style="padding:6px 12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);border-radius:20px;font-family:var(--fm);font-size:0.7rem;color:#A78BFA;cursor:pointer;">Dica de Falha (DTC)</span>
-          <span onclick="iaChip('Qual o torque do cabeçote do motor EA111?')" style="padding:6px 12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);border-radius:20px;font-family:var(--fm);font-size:0.7rem;color:#A78BFA;cursor:pointer;">Torque EA111</span>
+          <span onclick="iaChip('Como testar bobina de ignição com multímetro?')" style="padding:6px 12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);border-radius:20px;font-family:var(--fm);font-size:0.7rem;color:#A78BFA;cursor:pointer;">Dica de Falha (DTC)</span>
+          <span onclick="iaChip('Qual a ordem de aperto do cabeçote EA111?')" style="padding:6px 12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);border-radius:20px;font-family:var(--fm);font-size:0.7rem;color:#A78BFA;cursor:pointer;">Torque EA111</span>
         </div>
         <div id="iaMsgs" style="flex:1;overflow-y:auto;padding:20px;background:var(--surf-0);display:flex;flex-direction:column;gap:12px;">
-          <div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:20px;">Peça ajuda para diagnósticos, torques ou manuais.</div>
+          <div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:20px;">Peça ajuda para diagnósticos, torques ou manuais.<br><small>(O Assistente foca apenas nos veículos atualmente no pátio)</small></div>
         </div>
         <div class="ia-foot-wrap">
           <button type="button" class="btn-ia-voice" id="btnVozIA" onclick="iniciarVozIA()" title="Falar com a IA">🎙️</button>
@@ -795,7 +795,6 @@ function _resetChkBtns() {
   $('chkPD').value = 100; if($('pneuDVal')) $('pneuDVal').innerText = '100%';
   $('chkPT').value = 100; if($('pneuTVal')) $('pneuTVal').innerText = '100%';
 }
-
 // ═══════════════════════════════════════════════════════════════
 // QUICK-MOVE STATUS no Kanban
 // ═══════════════════════════════════════════════════════════════
@@ -823,7 +822,6 @@ async function quickMoveOS(osId, novoStatus, ev) {
   } catch(e) { toast('Erro ao mover: ' + e.message, 'err'); }
 }
 
-
 let _iaHist = [];
 
 function iaChip(txt) {
@@ -835,6 +833,10 @@ function iaChip(txt) {
 $('iaInput')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') iaEnviar();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// BLINDAGEM DA IA: REMOÇÃO DO GOOGLE SEARCH E FILTRO CIRÚRGICO
+// ═══════════════════════════════════════════════════════════════
 async function iaEnviar() {
   const inp = $('iaInput');
   const msg = inp?.value?.trim();
@@ -842,66 +844,51 @@ async function iaEnviar() {
   inp.value = '';
 
   _iaMsgUser(msg);
-  const lid = _iaMsgBot('<span class="j-spinner"></span> Consultando manuais e histórico...');
+  const lid = _iaMsgBot('<span class="j-spinner"></span> Analisando...');
 
   const key = J.gemini || null;
   _iaHist.push({ role: 'user', text: msg });
 
   if (!key) {
-    _iaReplace(lid, 'A chave da IA não está configurada no painel administrativo.');
+    _iaReplace(lid, '⚠ <strong>Chave da IA não configurada.</strong> Peça ao administrador para inserir a API Key no painel.');
     return;
   }
 
-  // 1. HISTÓRICO COMPLETO DA OFICINA — todos os veículos, todos os defeitos, aprendizado real
-  let historyContext = "═══════════════════════════════════════\nBASE DE CONHECIMENTO DESTA OFICINA (HISTÓRICO REAL):\n═══════════════════════════════════════\n";
+  // HISTÓRICO CIRÚRGICO: Pega apenas OS ativas no kanban e as 10 últimas concluídas
+  // Isso evita estourar o limite de tokens e impede que a IA trave.
+  let historyContext = "═══════════════════════════════════════\nVEÍCULOS ATUAIS NO PÁTIO E HISTÓRICO RECENTE:\n═══════════════════════════════════════\n";
 
-  // Agrupa por placa para detectar reincidências
+  const osAtivas = dbOS.filter(o => o.status !== 'Concluido' && o.status !== 'Cancelado');
+  const osRecentes = dbOS.filter(o => o.status === 'Concluido').sort((a,b)=>new Date(b.updatedAt||0)-new Date(a.updatedAt||0)).slice(0, 10);
+  const osLimitadas = [...osAtivas, ...osRecentes];
+  
   const porPlaca = {};
-  dbOS.forEach(o => {
+  osLimitadas.forEach(o => {
     const placa = o.placa || dbVeiculos.find(v=>v.id===o.veiculoId)?.placa || 'S/P';
     if (!porPlaca[placa]) porPlaca[placa] = [];
     porPlaca[placa].push(o);
   });
 
   Object.entries(porPlaca).forEach(([placa, oss]) => {
-    historyContext += `\n🚗 PLACA: ${placa} (${oss.length} atendimento(s))\n`;
-    oss.sort((a,b)=>new Date(b.createdAt||b.data||0)-new Date(a.createdAt||a.data||0)).forEach(o => {
+    historyContext += `\n🚗 PLACA: ${placa} (${oss.length} OS)\n`;
+    oss.forEach(o => {
       const v = dbVeiculos.find(x=>x.id===o.veiculoId);
       const modelo = v?.modelo || o.tipoVeiculo || '';
       historyContext += `  • [${o.data||'?'}] OS#${o.id.slice(-5).toUpperCase()} ${modelo} — KM: ${o.km||'?'}\n`;
       if (o.desc)        historyContext += `    RELATO: ${o.desc}\n`;
-      if (o.diagnostico) historyContext += `    DIAGNÓSTICO: ${o.diagnostico}\n`;
-      if (o.pecas?.length)    historyContext += `    PEÇAS: ${o.pecas.map(p=>`${p.desc}${p.qtd>1?' x'+p.qtd:''}`).join(', ')}\n`;
+      if (o.diagnostico) historyContext += `    DIAG: ${o.diagnostico}\n`;
+      if (o.pecas?.length)    historyContext += `    PEÇAS: ${o.pecas.map(p=>`${p.desc} x${p.qtd}`).join(', ')}\n`;
       if (o.servicos?.length) historyContext += `    SERVIÇOS: ${o.servicos.map(s=>s.desc).join(', ')}\n`;
-      if (o.status === 'Concluido') historyContext += `    STATUS: ✅ Concluído\n`;
     });
   });
 
-  // 2. PROMPT MESTRE — Doutor-IE/Bosch + auditoria + web grounding
-  const systemPrompt = `Você é o thIAguinho, Engenheiro Clínico Automotivo desta oficina mecânica.
-Nível técnico: equivalente ao Doutor-IE + Bosch Mecânico Pro + AllData.
-Você tem DUAS fontes de conhecimento obrigatórias — use AMBAS em toda resposta:
-
-FONTE 1 — BASE INTERNA (histórico real desta oficina, fornecido abaixo)
-FONTE 2 — INTERNET (use sua ferramenta de busca Google para confirmar torques, especificações técnicas, TSBs, recalls e procedimentos com dados atualizados)
+  // PROMPT BLINDADO (Sem diretiva de busca no Google para evitar "Sem resposta")
+  const systemPrompt = `Você é o thIAguinho, assistente técnico nível Doutor-IE desta oficina mecânica.
 
 REGRAS ABSOLUTAS:
-1. AUDITORIA DE GARANTIA: Se o mecânico mencionar uma placa + peça, VARRA a base interna e verifique se essa peça foi trocada recentemente. Alerte em **NEGRITO** se ainda estiver na garantia.
-   - Amortecedores: 2 anos / 50.000 km
-   - Pastilhas/Discos: 3 meses / 5.000 km
-   - Baterias: 12 a 18 meses
-   - Motor/Injeção: 3 meses (garantia legal PROCON)
-   - Kits suspensão (batente/coifa): 3 meses / 10.000 km
-
-2. REINCIDÊNCIA: Se a mesma placa apresentou o mesmo problema mais de uma vez, identifique e liste CAUSAS RAIZ (ex: mola cansada causando amortecedor, erro de montagem, peça de qualidade inferior).
-
-3. VERDADE COMPROVADA: Para torques, especificações, diagramas elétricos e TSBs, use a busca Google para confirmar os valores exatos. Nunca invente especificações técnicas. Se não tiver certeza, diga "consultando..." e busque.
-
-4. FORMATO DA RESPOSTA:
-   - Seja clínico e direto. Sem rodeios.
-   - Códigos OBD: Significado + Causas + Sintomas + Passos de Teste com valores de multímetro
-   - Torques: cite a fonte (manual do fabricante/modelo/ano)
-   - Se encontrar histórico relevante na base: cite a OS pelo número
+1. AUDITORIA: Se o mecânico mencionar uma placa, verifique no histórico abaixo se a peça já foi trocada. Alerte em **NEGRITO** se estiver na garantia (Amortecedor: 2 anos; Pastilha: 3 meses; Motor: 3 meses).
+2. FORMATO: Seja clínico e direto. Não invente dados. Para códigos OBD, dê Significado + Causas + Sintomas.
+3. Não pesquise na web, responda apenas com seu conhecimento nativo como Mecânico Pro.
 
 Responda sempre em português do Brasil.
 
@@ -909,25 +896,30 @@ ${historyContext}`;
 
   try {
     const contents = _iaHist.map(h => ({ role: h.role==='user'?'user':'model', parts:[{text:h.text}] }));
+    
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         contents,
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        tools: [{ google_search: {} }]
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+        // REMOVIDO: tools:[{google_search:{}}] (Para acabar com o erro "Sem Resposta")
       })
     });
+    
     const data = await res.json();
-    const resp = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta da base técnica.';
-
-    // Montar fontes citadas se houver groundingMetadata
-    const fontes = data.candidates?.[0]?.groundingMetadata?.searchEntryPoint?.renderedContent || '';
-    const fontesHtml = fontes ? `<div style="margin-top:12px;padding:8px 10px;background:rgba(0,212,255,0.06);border:1px solid var(--border);border-radius:4px;font-family:var(--fm);font-size:0.58rem;color:var(--muted2);">🌐 FONTES CONSULTADAS NA WEB</div>` : '';
+    
+    // Tratamento de Erro Real
+    if (!res.ok) {
+       throw new Error(data?.error?.message || `Erro HTTP ${res.status} retornado pelo Google.`);
+    }
+    
+    const resp = data.candidates?.[0]?.content?.parts?.[0]?.text || 'A IA não retornou um texto válido.';
 
     _iaHist.push({ role: 'model', text: resp });
-    _iaReplace(lid, resp.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--warn)">$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>') + fontesHtml);
+    _iaReplace(lid, resp.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--warn)">$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>'));
   } catch(e) {
-    _iaReplace(lid, '⚠ Erro de conexão com a central de diagnóstico: ' + e.message);
+    // Log de erro verdadeiro para o usuário não ficar no escuro
+    _iaReplace(lid, `⚠ <strong>Ocorreu um erro técnico na IA:</strong><br>${e.message}<br><br><em>Dica: Verifique se a sua chave de API não estourou o limite de uso diário.</em>`);
   }
 }
 
@@ -1633,7 +1625,7 @@ function fecharModalIA() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// IA ASSISTENTE DA O.S.
+// IA ASSISTENTE DA O.S. (MODO CIRÚRGICO SEM GOOGLE SEARCH)
 // ═══════════════════════════════════════════════════════════════
 let _iaOSMode = '', _iaOSSugestao = null;
 
@@ -1645,22 +1637,24 @@ async function _iaConsultarOS(prompt, modo) {
   document.getElementById('modalIaOSBody').innerHTML =
     `<div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:40px 0;">
       <span class="j-spinner" style="border-color:#A78BFA;border-right-color:transparent;width:28px;height:28px;border-width:3px;"></span>
-      <span style="font-family:var(--fm);font-size:0.75rem;color:#A78BFA;letter-spacing:2px;">CONSULTANDO HISTÓRICO + WEB...</span>
+      <span style="font-family:var(--fm);font-size:0.75rem;color:#A78BFA;letter-spacing:2px;">ANALISANDO HISTÓRICO...</span>
     </div>`;
   abrirModalIA(modo==='diag'?'SUGESTÃO DE DIAGNÓSTICO':modo==='servicos'?'SUGESTÃO DE SERVIÇOS':'ANÁLISE DA O.S.');
+  
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         contents:[{role:'user',parts:[{text:prompt}]}],
-        systemInstruction:{parts:[{text:'Você é o thIAguinho, assistente técnico de oficina mecânica. Responda em português do Brasil. Use a busca Google para confirmar torques, especificações e procedimentos com fontes reais. Seja objetivo, técnico e clínico. Use ** para negrito e - para listas.'}]},
-        tools:[{google_search:{}}]
+        systemInstruction:{parts:[{text:'Você é o thIAguinho, assistente técnico de oficina mecânica. Responda em português do Brasil. Seja objetivo, técnico e clínico. Use ** para negrito e - para listas.'}]}
+        // REMOVIDO PARA EVITAR ERRO: tools:[{google_search:{}}]
       })
     });
     const data = await res.json();
+    if (!res.ok) throw new Error(data?.error?.message || `Erro HTTP ${res.status} retornado pela API.`);
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch(e) {
-    document.getElementById('modalIaOSBody').innerHTML=`<div style="color:var(--danger);font-family:var(--fm);padding:20px;">⚠ Erro: ${e.message}</div>`;
+    document.getElementById('modalIaOSBody').innerHTML=`<div style="color:var(--danger);font-family:var(--fm);padding:20px;">⚠ <strong>Erro na conexão com a IA:</strong><br>${e.message}<br><br>Verifique a sua chave de API ou conexão com a internet.</div>`;
     return null;
   }
 }
@@ -1729,21 +1723,6 @@ async function iaSugerirServicos() {
     document.getElementById('btnAplicarIaOS').innerText=`✓ ADICIONAR ${servicos.length} SERVIÇO(S)`;
   }
 }
-
-function aplicarSugestaoIA() {
-  if (_iaOSMode==='diag' && _iaOSSugestao) {
-    const el = document.getElementById('osDiag');
-    const atual = el ? el.value.trim() : '';
-    if (el) el.value = atual ? atual + '\n' + _iaOSSugestao : _iaOSSugestao;
-    toast('✓ Diagnóstico inserido','ok');
-  } else if (_iaOSMode==='servicos' && Array.isArray(_iaOSSugestao) && _iaOSSugestao.length) {
-    _iaOSSugestao.forEach(s => adicionarServico({desc:s, valor:0}));
-    toast(`✓ ${_iaOSSugestao.length} serviço(s) adicionado(s)`,'ok');
-  }
-  fecharModalIA();
-}
-
-/* Powered by thIAguinho Soluções Digitais */
 </script>
 </body>
 </html>
