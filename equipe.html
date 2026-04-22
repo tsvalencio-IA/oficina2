@@ -1723,6 +1723,21 @@ async function iaSugerirServicos() {
     document.getElementById('btnAplicarIaOS').innerText=`✓ ADICIONAR ${servicos.length} SERVIÇO(S)`;
   }
 }
+
+function aplicarSugestaoIA() {
+  if (_iaOSMode==='diag' && _iaOSSugestao) {
+    const el = document.getElementById('osDiag');
+    const atual = el ? el.value.trim() : '';
+    if (el) el.value = atual ? atual + '\n' + _iaOSSugestao : _iaOSSugestao;
+    toast('✓ Diagnóstico inserido. Salvando O.S...', 'ok');
+  } else if (_iaOSMode==='servicos' && Array.isArray(_iaOSSugestao) && _iaOSSugestao.length) {
+    _iaOSSugestao.forEach(s => adicionarServico({desc:s, valor:0}));
+    toast(`✓ ${_iaOSSugestao.length} serviço(s) adicionado(s). Salvando O.S...', 'ok');
+  }
+  
+  fecharModalIA();
+  salvarOS(); 
+}
 </script>
 </body>
 </html>
