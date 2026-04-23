@@ -655,7 +655,11 @@ let dbOS=[], dbClientes=[], dbVeiculos=[], dbEstoque=[], dbMsgs=[];
 $('tbTenantNome').innerText = J.tnome;
 $('topNome').innerText = J.nome;
 $('topAv').innerText = J.nome.charAt(0).toUpperCase();
-if($('topCargo')) $('topCargo').innerText = (J.role || 'MECÂNICO').toUpperCase();
+if($('topCargo')) {
+  let roleDisplay = J.role || 'MECÂNICO';
+  if (roleDisplay.toLowerCase() === 'equipe') roleDisplay = 'MECÂNICO';
+  $('topCargo').innerText = roleDisplay.toUpperCase();
+}
 // TOAST
 function toast(msg,type='ok'){
   const el=document.createElement('div');
@@ -1335,7 +1339,13 @@ function renderKanban(){
   const minhasOS = dbOS.filter(o => {
     const st = (o.status||'').toLowerCase();
     if (st === 'cancelado') return false;
+    
+    // Se for gerente, vendedor ou admin, vê TODO o pátio.
+    if (['gerente', 'vendedor', 'admin'].includes(J.role)) return true;
+    
+    // Se for mecânico, só vê as OS sem dono ou as que são dele.
     if (o.mecId && o.mecId !== J.fid) return false;
+    
     return true;
   });
 
