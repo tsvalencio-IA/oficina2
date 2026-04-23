@@ -288,7 +288,7 @@ async function autenticar() {
       const sessao = {
         j_tid:          dF.tenantId,
         j_tnome:        maeData.nomeFantasia || 'Oficina',
-        j_role:         dF.cargo === 'gerente' ? 'gerente' : 'equipe',
+        j_role:         dF.cargo || 'mecanico',
         j_nome:         dF.nome,
         j_fid:          docF.id,
         j_comissao:     String(dF.comissao || 0),
