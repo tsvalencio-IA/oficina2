@@ -655,7 +655,7 @@ let dbOS=[], dbClientes=[], dbVeiculos=[], dbEstoque=[], dbMsgs=[];
 $('tbTenantNome').innerText = J.tnome;
 $('topNome').innerText = J.nome;
 $('topAv').innerText = J.nome.charAt(0).toUpperCase();
-
+if($('topCargo')) $('topCargo').innerText = (J.role || 'MECÂNICO').toUpperCase();
 // TOAST
 function toast(msg,type='ok'){
   const el=document.createElement('div');
