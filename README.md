@@ -1,80 +1,50 @@
-# JARVIS ERP V2 — Sistema de Gestão Automotiva
+# JARVIS ERP — Gestão Automotiva
+**Powered by thIAguinho Soluções Digitais**
 
-**Sistema 100% funcional para GitHub Pages** — Vanilla JavaScript + Firestore + Gemini IA
+Sistema 100% hospedado no **GitHub Pages** (front-end estático, sem servidor próprio).
+Backend: **Firestore (Firebase)** · Mídia: **Cloudinary** · IA: **Gemini API**
 
 ---
 
-## 📋 Estrutura de Arquivos
+## Estrutura de arquivos
 
 ```
-JARVIS_V2_FINAL/
-├── index.html              # Login (Master + Equipe + PIN)
-├── jarvis.html             # Dashboard Admin
-├── equipe.html             # Painel Equipe
+/
+├── index.html              # Login (Admin, Gestor, Atendente, Equipe por PIN)
+├── jarvis.html             # Painel principal (Admin / Gestor / Atendente)
+├── equipe.html             # Painel do mecânico (kanban simplificado)
+├── cliente.html            # Portal do cliente B2C (PIN + OBD2)
+├── clienteOficial.html     # Portal cliente governamental
+├── selecionar-perfil.html  # Tela de escolha de perfil (entrada do PWA)
+├── superadmin.html         # Gestão SaaS master (todos os tenants)
+├── manifest.json           # PWA manifest
+├── service-worker.js       # Cache offline (Network First)
+├── elm327-service.js       # Scanner OBD2 via Bluetooth BLE
+├── elm-bridge.js           # Bridge Capacitor + ELM327 Bluetooth Clássico
 ├── css/
-│   └── design.css          # Design System Dark Mode Premium
+│   └── design.css          # Design system dark mode
 ├── js/
-│   ├── config.js           # Firebase + White-label
-│   ├── core.js             # Namespace J + Listeners Firestore
-│   ├── auth.js             # Autenticação híbrida
-│   ├── os.js               # Ordens de Serviço (Kanban)
-│   ├── financeiro.js       # DRE + Parcelamento + NF
-│   └── ia.js               # Gemini RAG + Chat
-└── README.md               # Este arquivo
+│   ├── config.js           # Firebase config + white-label + Cloudinary
+│   ├── core.js             # Namespace J{} + RBAC + listeners Firestore
+│   ├── os.js               # Ordens de Serviço: kanban, CRUD, PDF, WhatsApp, Cília
+│   ├── financeiro.js       # DRE, fluxo de caixa, comissões, parcelamento
+│   ├── fiscal.js           # NF-e XML, estoque, PMSP
+│   ├── ia.js               # Gemini RAG (contexto 24 meses de OS)
+│   ├── tabela-tempa.js     # Tabela TEMPA — tempos padrão de mão de obra
+│   └── exportar-pmsp.js    # Exportação planilha PMSP (cliente governamental)
+├── data/
+│   ├── tabela-tempa.min.json        # Tabela TEMPA comprimida (produção)
+│   └── tabela-tempa-completa.json   # Tabela TEMPA completa (referência)
+└── capacitor-android/      # Configuração para build do APK Android
 ```
 
 ---
 
-## 🚀 Deployment no GitHub Pages
+## Configuração inicial
 
-### 1. Preparar Repositório
+### 1. Firebase
 
-```bash
-# Clonar este projeto
-git clone https://github.com/seu-usuario/jarvis-erp.git
-cd jarvis-erp
-
-# Criar branch gh-pages (se não existir)
-git checkout --orphan gh-pages
-git reset --hard
-git commit --allow-empty -m "Initial commit"
-git push -u origin gh-pages
-```
-
-### 2. Copiar Arquivos
-
-Copie todos os arquivos de `JARVIS_V2_FINAL/` para a raiz do repositório.
-
-### 3. Configurar GitHub Pages
-
-No repositório:
-- **Settings** → **Pages**
-- Source: `Deploy from a branch`
-- Branch: `gh-pages` / `root`
-- Salvar
-
-### 4. Fazer Push
-
-```bash
-git add .
-git commit -m "Deploy JARVIS ERP V2"
-git push origin gh-pages
-```
-
-Seu site estará disponível em: `https://seu-usuario.github.io/jarvis-erp/`
-
----
-
-## 🔐 Configuração do Firebase
-
-### 1. Criar Projeto Firebase
-
-1. Acesse [Firebase Console](https://console.firebase.google.com)
-2. Crie um novo projeto
-3. Ative **Firestore Database** (modo teste ou produção)
-4. Copie as credenciais
-
-### 2. Atualizar `js/config.js`
+Edite `js/config.js` com suas credenciais:
 
 ```javascript
 window.JARVIS_FB_CONFIG = {
@@ -82,226 +52,138 @@ window.JARVIS_FB_CONFIG = {
   authDomain:        "seu-projeto.firebaseapp.com",
   projectId:         "seu-projeto",
   storageBucket:     "seu-projeto.firebasestorage.app",
-  messagingSenderId: "SEU_MESSAGING_ID",
+  messagingSenderId: "SEU_ID",
   appId:             "SEU_APP_ID"
 };
 ```
 
-### 3. Estrutura Firestore
+### 2. Criar a oficina no Firestore
 
-Crie as coleções:
+Coleção `oficinas`, documento `{id_oficina}`:
 
-```
-oficinas/
-├── {id_oficina}/
-│   ├── nomeFantasia: "Oficina XYZ"
-│   ├── usuario: "admin"
-│   ├── senha: "senha123"
-│   ├── status: "Ativo"
-│   ├── brandColor: "#3B82F6"
-│   ├── apiKeys: {
-│   │   gemini: "SUA_CHAVE_GEMINI",
-│   │   cloudName: "seu-cloudinary",
-│   │   cloudPreset: "seu-preset"
-│   │ }
-│   └── subcoleções:
-│       ├── ordens_servico/
-│       ├── clientes/
-│       ├── veiculos/
-│       ├── funcionarios/
-│       ├── estoqueItems/
-│       ├── financeiro/
-│       ├── fornecedores/
-│       ├── mensagens/
-│       ├── chat_equipe/
-│       ├── agendamentos/
-│       ├── conhecimento_ia/
-│       └── lixeira_auditoria/
-```
-
----
-
-## 🤖 Configurar Gemini IA
-
-1. Acesse [Google AI Studio](https://aistudio.google.com/app/apikeys)
-2. Crie uma chave de API
-3. Salve em `oficinas/{id}/apiKeys/gemini`
-
----
-
-## 👥 Criar Usuários
-
-### Admin (Master)
-
-```javascript
-// Firestore: oficinas/{id}
+```json
 {
-  usuario: "admin",
-  senha: "senha123",
-  nomeFantasia: "Oficina ABC",
-  status: "Ativo"
-}
-```
-
-### Funcionário (Equipe)
-
-```javascript
-// Firestore: oficinas/{id}/funcionarios/{id}
-{
-  usuario: "joao",
-  senha: "senha123",
-  pin: "1234",
-  nome: "João Silva",
-  cargo: "mecanico",
-  comissao: 10,
-  tenantId: "{id_oficina}"
-}
-```
-
----
-
-## 📊 Módulos Implementados
-
-### ✅ Autenticação
-- Login Master (Admin)
-- Login Equipe (Funcionário)
-- Login com PIN (4 dígitos)
-- Sessão persistente (sessionStorage)
-
-### ✅ Ordens de Serviço
-- Kanban visual com 6 status
-- CRUD completo
-- Atribuição de mecânicos
-- Dashboard com resumos
-
-### ✅ Financeiro
-- DRE (Entradas × Saídas)
-- Lançamentos manuais
-- NF Entrada com **parcelamento automático**
-- Comissões por mecânico
-- Status: Pago/Pendente
-
-### ✅ IA (RAG)
-- Gemini integrado
-- Contexto dinâmico (dados da oficina)
-- Base de conhecimento técnico
-- Chat com admin
-
-### ✅ Estoque
-- CRUD de itens
-- Controle de mínimo
-- Sugestão automática em NF
-
-### ✅ Clientes & Equipe
-- Cadastro completo
-- Vinculação com O.S.
-- Chat CRM (admin ↔ cliente)
-
----
-
-## 🎨 Customização
-
-### Cores (White-Label)
-
-Edite `js/config.js`:
-
-```javascript
-window.JARVIS_BRAND = {
-  name:        "Sua Oficina",
-  tagline:     "Seu slogan",
-  logoLetter:  "S",
-  color:       "#FF6B35",  // Cor principal
-  colorDark:   "#D84315"   // Cor escura
-};
-```
-
-### Temas
-
-Modifique `css/design.css`:
-
-```css
-:root {
-  --brand:      #3B82F6;
-  --success:    #22D3A0;
-  --danger:     #F43F5E;
-  /* ... */
-}
-```
-
----
-
-## 🔧 Troubleshooting
-
-### "Erro ao conectar com o servidor"
-- Verifique credenciais do Firebase em `js/config.js`
-- Confirme que Firestore está ativo
-- Verifique regras de segurança (modo teste = aberto)
-
-### "API Key inválida"
-- Gere nova chave em [Google AI Studio](https://aistudio.google.com/app/apikeys)
-- Salve em `oficinas/{id}/apiKeys/gemini`
-
-### Dados não aparecem
-- Abra DevTools (F12) → Console
-- Verifique se há erros de Firestore
-- Confirme que `tenantId` está correto
-
----
-
-## 📱 Responsividade
-
-Sistema otimizado para:
-- ✅ Desktop (1920px+)
-- ✅ Tablet (768px - 1024px)
-- ✅ Mobile (320px - 767px)
-
----
-
-## 🔒 Segurança
-
-### Regras Firestore (Modo Teste)
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
+  "nomeFantasia": "S O S Mecânica e Elétrica",
+  "usuario": "admin",
+  "senha": "suasenha",
+  "status": "Ativo",
+  "brandColor": "#00D4FF",
+  "apiKeys": {
+    "gemini": "SUA_CHAVE_GEMINI",
+    "cloudName": "seu-cloudinary",
+    "cloudPreset": "seu-preset-upload"
   }
 }
 ```
 
-**⚠️ PRODUÇÃO:** Implemente autenticação Firebase Auth e regras de segurança apropriadas.
+Subcoleções de cada oficina (isoladas por `tenantId`):
+
+```
+oficinas/{id}/
+├── ordens_servico/    clientes/    veiculos/    funcionarios/
+├── estoqueItems/      financeiro/  fornecedores/  mensagens/
+├── chat_equipe/       agendamentos/  conhecimento_ia/  lixeira_auditoria/
+```
+
+### 3. Cloudinary
+
+1. Crie conta em cloudinary.com
+2. Crie um Upload Preset sem assinatura (unsigned)
+3. Salve `cloudName` e `cloudPreset` no documento da oficina no Firestore
+
+### 4. Gemini IA
+
+1. Acesse aistudio.google.com e gere uma chave de API
+2. Salve em `oficinas/{id}/apiKeys/gemini`
+
+### 5. Ícones do PWA
+
+Crie a pasta `assets/` e coloque:
+- `assets/icon-192.png` — 192x192 px, logo da oficina
+- `assets/icon-512.png` — 512x512 px, logo da oficina
+
+Sem esses arquivos o PWA funciona normalmente, mas sem ícone personalizado na tela do celular.
 
 ---
 
-## 📞 Suporte
+## Deploy no GitHub Pages
 
-Para dúvidas ou bugs:
-1. Verifique o console (F12)
-2. Consulte o README de cada módulo
-3. Abra issue no GitHub
+```bash
+git add .
+git commit -m "Deploy JARVIS ERP"
+git push origin main
+```
 
----
-
-## 📄 Licença
-
-Desenvolvido por **thIAguinho Soluções Digitais** — 2026
+No repositório: Settings → Pages → Source: Deploy from branch → main → / (root)
 
 ---
 
-## 🎯 Roadmap
+## Perfis de acesso
 
-- [ ] Exportação de relatórios (PDF)
-- [ ] Integração com WhatsApp API
-- [ ] Dashboard mobile nativo
-- [ ] Backup automático
-- [ ] Sincronização offline
-- [ ] Integração com sistemas de pagamento
+| Perfil | Acesso |
+|---|---|
+| superadmin | Painel SaaS master — gerencia todos os tenants e planos |
+| admin | Acesso total à oficina |
+| gestor | Acesso operacional completo |
+| atendente | OS, agenda e cadastro de clientes |
+| mecanico | Kanban próprio, upload de fotos, logs |
+| cliente | Portal PIN — acompanha OS e aprova orçamento |
 
 ---
 
-**Versão:** 2.0.0  
-**Última atualização:** Abril 2026  
-**Status:** ✅ Produção
+## Módulos
+
+**Ordens de Serviço**
+Kanban 7 etapas: Triagem → Orçamento → Orçamento Enviado → Aprovado → Andamento → Pronto → Entregue.
+Ao mover para Orçamento Enviado: WhatsApp automático com link + PIN. Ao marcar Pronto/Entregue: aviso ao cliente.
+Importação de orçamento do sistema Cília (PDF ou XML) diretamente na aba de peças da OS.
+Busca de histórico por placa + serviço/peça diretamente dentro da OS (pré-preenchida com a placa do veículo).
+
+**Cliente governamental (PM, Prefeitura)**
+Desconto por contrato configurado no cadastro (% MO e % Peças). Aplicado automaticamente na OS com exibição de valor bruto e líquido. Portal clienteOficial.html mostra peças com desconto. Exportação PMSP com colunas Valor Tabela / Desconto (%) / Valor com Desconto.
+
+**Portal do cliente B2C**
+Acesso por login + PIN. Acompanha etapas da OS, vê peças e serviços aprovados, fotos/vídeos, timeline. Scanner OBD2 via Bluetooth ELM327 orienta sobre saúde do veículo.
+
+**Financeiro**
+DRE e fluxo de caixa em tempo real. Lançamento automático ao fechar OS. Comissão separada por mecânico (% MO + % peças).
+
+**IA Gemini RAG**
+Disponível para admin/gestor/mecânico. Contexto: OS, estoque, clientes, histórico 24 meses. Diagnóstico de códigos OBD2.
+Não disponível nos portais cliente.html e clienteOficial.html.
+
+**Tabela TEMPA**
+Base SINDIREPA-SP. Autocomplete por serviço. Calcula valor (tempo × R$/hora configurado).
+
+---
+
+## Regras Firestore (desenvolvimento)
+
+```
+allow read, write: if true;
+```
+
+Em produção: implemente Firebase Auth e restrição por tenantId.
+
+---
+
+## Build APK Android
+
+O repositório inclui `capacitor-android/` com GitHub Actions.
+1. Suba todos os arquivos incluindo a pasta `.github/` (habilite arquivos ocultos no Windows)
+2. Settings → Actions → General → Allow all actions + Read and write permissions
+3. Aba Actions → execute o workflow Build APK
+4. Baixe o APK nos Artifacts
+
+---
+
+## Troubleshooting
+
+**Dados não aparecem** → Verifique `tenantId` em `js/config.js`
+**IA não responde** → Confirme a chave Gemini em `oficinas/{id}/apiKeys/gemini`
+**Upload de fotos falha** → Preset deve ser `unsigned` no Cloudinary
+**PWA não instala** → Coloque `assets/icon-192.png` e `assets/icon-512.png`
+
+---
+
+Versão 1.5.0 · Abril 2026 · Status: Produção

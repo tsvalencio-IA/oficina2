@@ -73,12 +73,27 @@ window.renderKanban = function() {
       const btnPrev = sPrev ? `<button onclick="event.stopPropagation(); window.moverStatusOS('${os.id}', '${sPrev}')" title="Mover para ${sPrev}" style="background:transparent;border:none;color:var(--muted2);cursor:pointer;padding:4px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15 18l-6-6 6-6"/></svg></button>` : '<div></div>';
       const btnNext = sNext ? `<button onclick="event.stopPropagation(); window.moverStatusOS('${os.id}', '${sNext}')" title="Mover para ${sNext}" style="background:transparent;border:none;color:var(--muted2);cursor:pointer;padding:4px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18l6-6-6-6"/></svg></button>` : '<div></div>';
 
+      // Sanitização defensiva contra HTML/script em campos de texto livres
+      const esc = s => String(s == null ? '' : s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch]));
+      const nomeCli = esc(c?.nome || os.cliente || 'Cliente Avulso').trim() || 'Cliente Avulso';
+      const placaRaw = (os.placa || v?.placa || 'S/PLACA').toString().trim().toUpperCase();
+      const placaFmt = placaRaw === 'S/PLACA' ? 'S/PLACA' : esc(placaRaw);
+      const descFmt = esc(os.desc || os.relato || 'Sem descrição inicial...').substring(0, 120);
+
+      // Botão de exclusão definitiva — visível apenas para admin/gestor/superadmin
+      const role = (sessionStorage.getItem('j_role') || '').toLowerCase();
+      const ehGestor = ['admin','gestor','gerente','superadmin'].includes(role);
+      const btnExcluir = ehGestor
+        ? `<button title="Excluir definitivamente esta O.S." onclick="event.stopPropagation();window.excluirOSDef('${os.id}')" style="background:transparent;border:1px solid var(--danger);color:var(--danger);font-family:var(--fm);font-size:0.6rem;padding:3px 7px;border-radius:3px;cursor:pointer;">🗑</button>`
+        : '';
+
       return `<div class="k-card" style="border-left-color:${cor}" onclick="window.prepOS('edit','${os.id}');abrirModal('modalOS')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
-            <div class="k-placa" style="color:${cor};margin:0;font-size:1rem;">${os.placa || v?.placa || 'S/PLACA'}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:6px;">
+            <div class="k-placa" style="color:${cor};margin:0;font-size:1rem;">${placaFmt}</div>
+            ${btnExcluir}
         </div>
-        <div class="k-cliente" style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:2px;">${c?.nome || os.cliente || 'Cliente Avulso'}</div>
-        <div class="k-desc" style="margin-bottom:8px;">${os.desc || os.relato || 'Sem descrição inicial...'}</div>
+        <div class="k-cliente" style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:2px;">${nomeCli}</div>
+        <div class="k-desc" style="margin-bottom:8px;">${descFmt}</div>
         <div class="k-footer" style="margin-bottom:8px;">
           <span class="k-tipo ${tipoCls}">${tipoLabel}</span>
           <span style="font-family:var(--fm);font-size:0.85rem;color:var(--success);font-weight:700;">${moeda(os.total)}</span>
@@ -94,12 +109,59 @@ window.renderKanban = function() {
 };
 
 window.moverStatusOS = async function(id, novoStatus) {
+    // Captura status antigo ANTES de atualizar (para comparar)
+    const osAntes = J.os.find(x => x.id === id);
+    const statusAntes = osAntes?.status || '';
+
     await db.collection('ordens_servico').doc(id).update({ status: novoStatus, updatedAt: new Date().toISOString() });
     window.toast(`✓ Movido para ${novoStatus.replace('_', ' ')}`);
-    audit('KANBAN', `Moveu OS ${id.slice(-6)} para ${novoStatus}`);
-    
+    audit('KANBAN', `Moveu OS ${id.slice(-6)} de "${statusAntes}" para "${novoStatus}"`);
+
     if (novoStatus === 'Orcamento_Enviado') {
         window.enviarWppB2C(id);
+    }
+
+    // ═══ WhatsApp automático: Pronto para retirada / Entregue ═══
+    if ((novoStatus === 'Pronto' || novoStatus === 'Entregue') &&
+        statusAntes !== 'Pronto' && statusAntes !== 'Entregue') {
+        setTimeout(() => {
+            if (typeof window.dispararAvisoEntregaAutomatico === 'function') {
+                window.dispararAvisoEntregaAutomatico(id, novoStatus);
+            }
+        }, 300);
+    }
+};
+
+/**
+ * Dispara aviso via WhatsApp quando a O.S. fica Pronta ou Entregue.
+ * Abre o WhatsApp Web/App com mensagem pré-preenchida. Cliente confirma envio.
+ */
+window.dispararAvisoEntregaAutomatico = function(id, novoStatus) {
+    const os = J.os.find(x => x.id === id);
+    if (!os) return;
+    const c = J.clientes.find(x => x.id === os.clienteId);
+    if (!c?.wpp) {
+        window.toast('Cliente sem WhatsApp cadastrado — aviso automático não enviado.', 'warn');
+        return;
+    }
+    const v = J.veiculos.find(x => x.id === os.veiculoId);
+    const placaFmt = os.placa || v?.placa || 'seu veículo';
+    const modelo = v?.modelo ? ` ${v.modelo}` : '';
+    const fone = String(c.wpp).replace(/\D/g, '');
+
+    let msg = '';
+    if (novoStatus === 'Pronto') {
+        msg = `Olá ${c.nome}! 👋\n\nAqui é da ${J.tnome}.\n\n✅ Seu veículo ${placaFmt}${modelo} está *PRONTO PARA RETIRADA*!\n\nPassamos a O.S. #${id.slice(-6).toUpperCase()} para conferência do caixa. Pode vir buscar quando for melhor pra você.\n\nAguardamos!`;
+    } else if (novoStatus === 'Entregue') {
+        msg = `Olá ${c.nome}! 👋\n\nAqui é da ${J.tnome}.\n\n🚘 Confirmamos a *ENTREGA* do seu veículo ${placaFmt}${modelo} referente à O.S. #${id.slice(-6).toUpperCase()}.\n\nMuito obrigado pela confiança! Qualquer dúvida pós-serviço, é só chamar por aqui.\n\nBoa estrada! 🛣️`;
+    }
+    if (!msg) return;
+
+    // Confirma com o usuário antes de abrir o WhatsApp (evita spam involuntário)
+    if (confirm(`Enviar aviso automático para ${c.nome} via WhatsApp?\n\n"${msg.substring(0, 200)}..."`)) {
+        const url = `https://wa.me/55${fone}?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
+        audit('WHATSAPP', `Aviso ${novoStatus === 'Pronto' ? 'PRONTO P/ RETIRADA' : 'ENTREGA CONFIRMADA'} enviado para ${c.nome} (OS ${id.slice(-6).toUpperCase()})`);
     }
 };
 
@@ -123,8 +185,11 @@ window.enviarWppB2C = function(id) {
     const loginUser = cli?.login || os.placa || cliNome.split(' ')[0].toLowerCase();
     const pin = cli?.pin || os.pin || '';
 
-    // ✅ Link correto para GitHub Pages
-    const link = 'https://tsvalencio-ia.github.io/oficina1/cliente.html';
+    // Link correto: governo → clienteOficial, demais → cliente
+    const isGov = cli?.tipoCliente === 'governo';
+    const link = isGov
+      ? 'https://tsvalencio-ia.github.io/of/clienteOficial.html'
+      : 'https://tsvalencio-ia.github.io/of/cliente.html';
 
     const totalFmt = (os.total || 0).toFixed(2).replace('.', ',');
 
@@ -148,7 +213,11 @@ let timelineOSAtual = [];
 
 window.prepOS = function(mode, id = null) {
   ['osId', 'osPlaca', 'osVeiculo', 'osCliente', 'osCelular', 'osCpf', 'osDiagnostico', 'osRelato', 'osDescricao', 'chkObs', 'osKm', 'osData'].forEach(f => { if ($(f)) $(f).value = ''; });
-  ['chkPainel', 'chkPressao', 'chkCarroceria', 'chkDocumentos'].forEach(f => { if ($(f)) $(f).checked = false; });
+  // Checklist tri-state: limpa valor hidden + botões ativos
+  ['chkPainel', 'chkPressao', 'chkCarroceria', 'chkDocumentos'].forEach(f => {
+    if ($(f)) $(f).value = '';
+    if (typeof window._chkTriApply === 'function') window._chkTriApply(f, '');
+  });
   
   if ($('osStatus')) $('osStatus').value = 'Triagem';
   if ($('osTipoVeiculo')) $('osTipoVeiculo').value = 'carro';
@@ -164,6 +233,7 @@ window.prepOS = function(mode, id = null) {
   if ($('osTimelineData')) $('osTimelineData').value = '[]';
   if ($('osIdBadge')) $('osIdBadge').innerText = 'NOVA O.S.';
   if ($('btnGerarPDFOS')) $('btnGerarPDFOS').style.display = 'none'; 
+  if ($('btnExcluirOS')) $('btnExcluirOS').style.display = 'none';   // só aparece editando OS existente
   if ($('areaPgtoOS')) $('areaPgtoOS').style.display = 'none'; 
   if ($('btnEnviarWppOS')) $('btnEnviarWppOS').style.display = 'none';
   
@@ -203,6 +273,37 @@ window.prepOS = function(mode, id = null) {
     if ($('osDescricao')) $('osDescricao').value = o.desc || o.relato || '';
     if ($('osData')) $('osData').value = o.data || ''; 
     if ($('osKm')) $('osKm').value = o.km || '';
+    if ($('osEntregueA')) {
+      $('osEntregueA').value = o.entreguePara || '';
+      const r = document.getElementById('rowEntregueA');
+      if (r) r.style.display = (o.status === 'Entregue') ? 'flex' : 'none';
+    }
+    // Desconto personalizado desta OS
+    if ($('osDescMO')) $('osDescMO').value = o.descMO != null ? (parseFloat(o.descMO)*100).toFixed(1) : '';
+    if ($('osDescPeca')) $('osDescPeca').value = o.descPeca != null ? (parseFloat(o.descPeca)*100).toFixed(1) : '';
+    // Mostra blocos governo se cliente for gov
+    const _cli_load = (window.J?.clientes||[]).find(cl=>cl.id===o.clienteId);
+    const _ehGov_load = _cli_load?.tipoCliente === 'governo';
+    const _blocoDesc = document.getElementById('blocoDescontoOS');
+    const _blocoReais = document.getElementById('blocoReais');
+    if (_blocoDesc) _blocoDesc.style.display = _ehGov_load ? 'block' : 'none';
+    if (_blocoReais) {
+      // Somente dono (perfil admin) vê peças reais
+      const _isDono = (window.J?.perfil === 'admin' || window.J?.isDono === true);
+      _blocoReais.style.display = (_ehGov_load && _isDono) ? 'block' : 'none';
+    }
+    // Carregar peças reais
+    if ($('containerPecasReais')) {
+      $('containerPecasReais').innerHTML = '';
+      (o.pecasReais || []).forEach(p => window.adicionarPecaRealRow(p));
+    }
+    // LOTE C — Traz próxima revisão ao editar
+    if ($('osProxRev')) $('osProxRev').value = o.proxRev || '';
+    if ($('osProxKm'))  $('osProxKm').value  = o.proxKm  || '';
+    // LOTE B — Traz forma de pagamento e parcelas
+    if ($('osPgtoForma')) $('osPgtoForma').value = o.pgtoForma || '';
+    if ($('osPgtoData'))  $('osPgtoData').value  = o.pgtoData  || '';
+    if ($('osPgtoParcelas')) $('osPgtoParcelas').value = o.pgtoParcelas || 1;
     
     window.osPecas = o.pecas || [];
     window.osFotos = o.media || o.fotos || [];
@@ -224,10 +325,20 @@ window.prepOS = function(mode, id = null) {
     if ($('chkPneuTra')) $('chkPneuTra').value = o.chkPneuTra || ''; 
     if ($('chkObs')) $('chkObs').value = o.chkObs || '';
     
-    if (o.chkPainel && $('chkPainel')) $('chkPainel').checked = true; 
-    if (o.chkPressao && $('chkPressao')) $('chkPressao').checked = true;
-    if (o.chkCarroceria && $('chkCarroceria')) $('chkCarroceria').checked = true;
-    if (o.chkDocumentos && $('chkDocumentos')) $('chkDocumentos').checked = true;
+    // LOTE 1.5 — Checklist tri-state: aceita formato antigo (boolean) e novo (string 'ok'/'atencao'/'critico')
+    const _toTri = v => (v === true || v === 'ok') ? 'ok' : (v === 'atencao' || v === 'critico') ? v : '';
+    if (typeof window._chkTriApply === 'function') {
+      window._chkTriApply('chkPainel',     _toTri(o.chkPainel));
+      window._chkTriApply('chkPressao',    _toTri(o.chkPressao));
+      window._chkTriApply('chkCarroceria', _toTri(o.chkCarroceria));
+      window._chkTriApply('chkDocumentos', _toTri(o.chkDocumentos));
+    } else {
+      // Fallback compatível com versão antiga
+      if (o.chkPainel && $('chkPainel')) $('chkPainel').value = _toTri(o.chkPainel);
+      if (o.chkPressao && $('chkPressao')) $('chkPressao').value = _toTri(o.chkPressao);
+      if (o.chkCarroceria && $('chkCarroceria')) $('chkCarroceria').value = _toTri(o.chkCarroceria);
+      if (o.chkDocumentos && $('chkDocumentos')) $('chkDocumentos').value = _toTri(o.chkDocumentos);
+    }
 
     if($('osTimelineData') && o.timeline) {
         $('osTimelineData').value = JSON.stringify(o.timeline);
@@ -241,8 +352,43 @@ window.prepOS = function(mode, id = null) {
     
     window.calcOSTotal();
     window.verificarStatusOS();
+
+    // Preenche automaticamente a busca histórica com a placa desta OS
+    if ($('histBuscaPlaca')) {
+      $('histBuscaPlaca').value = (o.placa || '').toUpperCase();
+      // Limpa resultado anterior para evitar confusão
+      if ($('histBuscaResultado')) $('histBuscaResultado').innerHTML = '';
+    }
     
     if ($('btnGerarPDFOS')) $('btnGerarPDFOS').style.display = 'block';
+
+    // Botão de exclusão só aparece se for admin/gestor (e estiver editando OS existente)
+    if ($('btnExcluirOS')) {
+      const role = (sessionStorage.getItem('j_role') || '').toLowerCase();
+      const ehGestor = ['admin','gestor','gerente','superadmin'].includes(role);
+      $('btnExcluirOS').style.display = ehGestor ? 'block' : 'none';
+      $('btnExcluirOS').dataset.osId = id;
+    }
+
+    // Botão Exportar Orçamento PMSP — aparece SOMENTE se cliente é governamental
+    if ($('btnExportarPMSP')) {
+      const ehGov = typeof window._osClienteGovernamental === 'function' && window._osClienteGovernamental();
+      $('btnExportarPMSP').style.display = ehGov ? 'block' : 'none';
+      $('btnExportarPMSP').dataset.osId = id;
+    }
+  }
+};
+
+// Helper para o botão "EXCLUIR O.S." dentro do modal — pega o ID do dataset e chama excluirOSDef
+window._excluirOSDoModal = async function() {
+  const btn = document.getElementById('btnExcluirOS');
+  const id = btn?.dataset?.osId;
+  if (!id) return;
+  if (typeof window.excluirOSDef === 'function') {
+    const ok = await window.excluirOSDef(id);
+    if (ok && typeof window.fecharModal === 'function') {
+      window.fecharModal('modalOS');
+    }
   }
 };
 
@@ -271,63 +417,185 @@ window.renderItensOS = function() {
 
 window.adicionarServicoOS = function() {
   const sel = document.createElement('div');
-  sel.style.cssText = 'display:grid;grid-template-columns:1fr 100px 32px;gap:8px;align-items:center;margin-bottom:8px;';
-  sel.innerHTML = `
-    <input type="text" class="j-input serv-desc" placeholder="Ex: Alinhamento, Troca de Freio..." oninput="window.calcOSTotal()">
-    <input type="number" class="j-input serv-valor" value="0" step="0.01" placeholder="R$ 0,00" oninput="window.calcOSTotal()">
-    <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
-  `;
+  const ehGov = typeof window._osClienteGovernamental === 'function' && window._osClienteGovernamental();
+  const dadosGov = ehGov && typeof window._osDadosGovernamental === 'function' ? window._osDadosGovernamental() : null;
+  const descMO = dadosGov ? parseFloat(dadosGov.descMO || 0) : 0;
+  if (ehGov && descMO > 0) {
+    sel.style.cssText = 'display:grid;grid-template-columns:1fr 70px 110px 90px 32px;gap:8px;align-items:center;margin-bottom:8px;';
+    sel.innerHTML = `
+      <input type="text" class="j-input serv-desc" placeholder="Ex: Alinhamento, Troca de Freio..." oninput="window.calcOSTotal()">
+      <input type="text" class="j-input serv-tempo" placeholder="TMO h" title="Tempo de Mão de Obra (horas)" style="text-align:center;font-family:var(--fm);font-size:0.78rem;color:var(--warn);">
+      <input type="number" class="j-input serv-valor" value="0" step="0.01" placeholder="Valor tabela" oninput="window.calcOSTotal()">
+      <div class="serv-desc-box" style="font-family:var(--fm);font-size:0.72rem;color:var(--ok);text-align:right;line-height:1.2;">
+        <div class="serv-desc-pct" style="color:var(--purple,#A78BFA);font-size:0.65rem;">-${(descMO*100).toFixed(0)}%</div>
+        <div class="serv-desc-val">R$ 0,00</div>
+      </div>
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  } else {
+    sel.style.cssText = 'display:grid;grid-template-columns:1fr 70px 100px 32px;gap:8px;align-items:center;margin-bottom:8px;';
+    sel.innerHTML = `
+      <input type="text" class="j-input serv-desc" placeholder="Ex: Alinhamento, Troca de Freio..." oninput="window.calcOSTotal()">
+      <input type="text" class="j-input serv-tempo" placeholder="TMO h" title="Tempo de Mão de Obra (horas)" style="text-align:center;font-family:var(--fm);font-size:0.78rem;color:var(--warn);">
+      <input type="number" class="j-input serv-valor" value="0" step="0.01" placeholder="R$ 0,00" oninput="window.calcOSTotal()">
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  }
   if($('containerServicosOS')) $('containerServicosOS').appendChild(sel);
 };
 
 window.renderServicoOSRow = function(s) {
   const div = document.createElement('div');
-  div.style.cssText = 'display:grid;grid-template-columns:1fr 100px 32px;gap:8px;align-items:center;margin-bottom:8px;';
-  div.innerHTML = `
-    <input type="text" class="j-input serv-desc" value="${s.desc || ''}" placeholder="Descrição do Serviço" oninput="window.calcOSTotal()">
-    <input type="number" class="j-input serv-valor" value="${s.valor || 0}" step="0.01" placeholder="R$ 0,00" oninput="window.calcOSTotal()">
-    <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
-  `;
+  const ehGov = typeof window._osClienteGovernamental === 'function' && window._osClienteGovernamental();
+  const dadosGov = ehGov && typeof window._osDadosGovernamental === 'function' ? window._osDadosGovernamental() : null;
+  const descMO = dadosGov ? parseFloat(dadosGov.descMO || 0) : 0;
+  const vBruto = parseFloat(s.valor || 0);
+  const vFinal = +(vBruto * (1 - descMO)).toFixed(2);
+  if (ehGov && descMO > 0) {
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 70px 110px 90px 32px;gap:8px;align-items:center;margin-bottom:8px;';
+    div.innerHTML = `
+      <input type="text" class="j-input serv-desc" value="${s.desc || ''}" placeholder="Descrição do Serviço" oninput="window.calcOSTotal()">
+      <input type="text" class="j-input serv-tempo" value="${s.tempo || ''}" placeholder="TMO h" title="Tempo de Mão de Obra (horas)" style="text-align:center;font-family:var(--fm);font-size:0.78rem;color:var(--warn);">
+      <input type="number" class="j-input serv-valor" value="${vBruto}" step="0.01" placeholder="Valor tabela" oninput="window.calcOSTotal()">
+      <div class="serv-desc-box" style="font-family:var(--fm);font-size:0.72rem;color:var(--ok);text-align:right;line-height:1.2;">
+        <div class="serv-desc-pct" style="color:var(--purple,#A78BFA);font-size:0.65rem;">-${(descMO*100).toFixed(0)}%</div>
+        <div class="serv-desc-val">R$ ${vFinal.toFixed(2).replace('.',',')}</div>
+      </div>
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  } else {
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 70px 100px 32px;gap:8px;align-items:center;margin-bottom:8px;';
+    div.innerHTML = `
+      <input type="text" class="j-input serv-desc" value="${s.desc || ''}" placeholder="Descrição do Serviço" oninput="window.calcOSTotal()">
+      <input type="text" class="j-input serv-tempo" value="${s.tempo || ''}" placeholder="TMO h" title="Tempo de Mão de Obra (horas)" style="text-align:center;font-family:var(--fm);font-size:0.78rem;color:var(--warn);">
+      <input type="number" class="j-input serv-valor" value="${vBruto}" step="0.01" placeholder="R$ 0,00" oninput="window.calcOSTotal()">
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  }
   if($('containerServicosOS')) $('containerServicosOS').appendChild(div);
 };
 
 window.adicionarPecaOS = function() {
+  const ehGov = typeof window._osClienteGovernamental === 'function' && window._osClienteGovernamental();
   const sel = document.createElement('div');
-  sel.style.cssText = 'display:grid;grid-template-columns:1fr 80px 90px 90px 32px;gap:8px;align-items:center;';
-  const opts = '<option value="">Selecionar peça...</option>' + J.estoque.filter(p => (p.qtd || 0) > 0).map(p => `<option value="${p.id}" data-venda="${p.venda || 0}" data-desc="${p.desc || ''}">[${p.qtd}un] ${p.desc} — ${moeda(p.venda)}</option>`).join('');
-  sel.innerHTML = `
-    <select class="j-select peca-sel" onchange="window.selecionarPecaOS(this)">${opts}</select>
-    <input type="number" class="j-input peca-qtd" value="1" min="1" placeholder="Qtd" oninput="window.calcOSTotal()">
-    <input type="number" class="j-input peca-custo" value="0" step="0.01" placeholder="Custo" oninput="window.calcOSTotal()">
-    <input type="number" class="j-input peca-venda" value="0" step="0.01" placeholder="Venda" oninput="window.calcOSTotal()">
-    <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
-  `;
+
+  if (ehGov) {
+    // Cliente governamental — peça AVULSA com badge de desconto
+    const dadosGovP = typeof window._osDadosGovernamental === 'function' ? window._osDadosGovernamental() : null;
+    const descPecaP = dadosGovP ? parseFloat(dadosGovP.descPeca || 0) : 0;
+    const colsGov = descPecaP > 0
+      ? '120px 1fr 60px 100px 80px 32px'
+      : '120px 1fr 60px 100px 32px';
+    sel.style.cssText = `display:grid;grid-template-columns:${colsGov};gap:8px;align-items:center;background:rgba(167,139,250,0.06);padding:8px;border-radius:3px;border:1px solid rgba(167,139,250,0.2);`;
+    sel.dataset.pecaAvulsa = '1';
+    const badgePeca = descPecaP > 0 ? `
+      <div class="peca-desc-box" style="font-family:var(--fm);font-size:0.72rem;color:var(--ok);text-align:right;line-height:1.2;">
+        <div style="color:var(--purple,#A78BFA);font-size:0.65rem;">-${(descPecaP*100).toFixed(0)}%</div>
+        <div class="peca-desc-val">R$ 0,00</div>
+      </div>` : '';
+    sel.innerHTML = `
+      <input type="text" class="j-input peca-codigo" placeholder="Código original" title="Código original do fabricante (ex: 5207381)" style="font-family:var(--fm);font-size:0.78rem;">
+      <input type="text" class="j-input peca-desc-livre" placeholder="Descrição da peça (ex: AMORTECEDOR DIANT. DIREITO)" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-qtd" value="1" min="1" placeholder="Qtd" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-venda" value="0" step="0.01" placeholder="Valor unit. registrado" oninput="window.calcOSTotal()" title="Valor unitário da ata de registro de preço">
+      ${badgePeca}
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  } else {
+    // Cliente normal — usa estoque, mas permite peça avulsa se não tiver no estoque
+    sel.style.cssText = 'display:grid;grid-template-columns:1fr 80px 90px 90px 32px;gap:8px;align-items:center;';
+    const opts = '<option value="">Selecionar peça...</option>'
+      + J.estoque.filter(p => (p.qtd || 0) > 0).map(p => `<option value="${p.id}" data-venda="${p.venda || 0}" data-desc="${p.desc || ''}">[${p.qtd}un] ${p.desc} — ${moeda(p.venda)}</option>`).join('')
+      + '<option value="__avulsa__" data-venda="0" data-desc="">➕ Peça não cadastrada (digitar manualmente)</option>';
+    sel.innerHTML = `
+      <select class="j-select peca-sel" onchange="window.selecionarPecaOS(this)">${opts}</select>
+      <input type="number" class="j-input peca-qtd" value="1" min="1" placeholder="Qtd" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-custo" value="0" step="0.01" placeholder="Custo" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-venda" value="0" step="0.01" placeholder="Venda" oninput="window.calcOSTotal()">
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  }
   if($('containerPecasOS')) $('containerPecasOS').appendChild(sel); window.calcOSTotal();
 };
 
 window.renderPecaOSRow = function(p) {
   const div = document.createElement('div');
-  div.style.cssText = 'display:grid;grid-template-columns:1fr 80px 90px 90px 32px;gap:8px;align-items:center;';
-  const opts = '<option value="">' + p.desc + '</option>' + J.estoque.filter(x => (x.qtd || 0) > 0 || x.id === p.estoqueId).map(x => `<option value="${x.id}" data-venda="${x.venda || 0}" data-desc="${x.desc || ''}" ${x.id === p.estoqueId ? 'selected' : ''}>[${x.qtd}un] ${x.desc}</option>`).join('');
-  div.innerHTML = `
-    <select class="j-select peca-sel" onchange="window.selecionarPecaOS(this)">${opts}</select>
-    <input type="number" class="j-input peca-qtd" value="${p.qtd || p.q || 1}" min="1" oninput="window.calcOSTotal()">
-    <input type="number" class="j-input peca-custo" value="${p.custo || p.c || 0}" step="0.01" oninput="window.calcOSTotal()">
-    <input type="number" class="j-input peca-venda" value="${p.venda || p.v || 0}" step="0.01" oninput="window.calcOSTotal()">
-    <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
-  `;
+  const ehGov = typeof window._osClienteGovernamental === 'function' && window._osClienteGovernamental();
+  const dadosGov = ehGov && typeof window._osDadosGovernamental === 'function' ? window._osDadosGovernamental() : null;
+  const descPeca = dadosGov ? parseFloat(dadosGov.descPeca || 0) : 0;
+
+  if (ehGov && p.codigo !== undefined) {
+    // Peça avulsa (governo) — mostra código + desc + qtd + valor + badge desconto
+    const vBruto = parseFloat(p.venda || p.v || 0);
+    const qtd = parseFloat(p.qtd || p.q || 1);
+    const vFinal = +((qtd * vBruto) * (1 - descPeca)).toFixed(2);
+    const colsGov = descPeca > 0 ? '120px 1fr 60px 100px 80px 32px' : '120px 1fr 60px 100px 32px';
+    div.style.cssText = `display:grid;grid-template-columns:${colsGov};gap:8px;align-items:center;background:rgba(167,139,250,0.06);padding:8px;border-radius:3px;border:1px solid rgba(167,139,250,0.2);`;
+    div.dataset.pecaAvulsa = '1';
+    const badgePeca = descPeca > 0 ? `
+      <div class="peca-desc-box" style="font-family:var(--fm);font-size:0.72rem;color:var(--ok);text-align:right;line-height:1.2;">
+        <div style="color:var(--purple,#A78BFA);font-size:0.65rem;">-${(descPeca*100).toFixed(0)}%</div>
+        <div class="peca-desc-val">R$ ${vFinal.toFixed(2).replace('.',',')}</div>
+      </div>` : '';
+    div.innerHTML = `
+      <input type="text" class="j-input peca-codigo" value="${p.codigo || ''}" placeholder="Código original" style="font-family:var(--fm);font-size:0.78rem;">
+      <input type="text" class="j-input peca-desc-livre" value="${p.desc || ''}" placeholder="Descrição da peça" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-qtd" value="${qtd}" min="1" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-venda" value="${vBruto}" step="0.01" placeholder="Valor unit. registrado" oninput="window.calcOSTotal()">
+      ${badgePeca}
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  } else {
+    // Cliente normal (estoque)
+    const vBruto = parseFloat(p.venda || p.v || 0);
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 80px 90px 90px 32px;gap:8px;align-items:center;';
+    const opts = '<option value="">' + p.desc + '</option>' + (J.estoque||[]).filter(x => (x.qtd || 0) > 0 || x.id === p.estoqueId).map(x => `<option value="${x.id}" data-venda="${x.venda || 0}" data-desc="${x.desc || ''}" ${x.id === p.estoqueId ? 'selected' : ''}>[${x.qtd}un] ${x.desc}</option>`).join('');
+    div.innerHTML = `
+      <select class="j-select peca-sel" onchange="window.selecionarPecaOS(this)">${opts}</select>
+      <input type="number" class="j-input peca-qtd" value="${p.qtd || p.q || 1}" min="1" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-custo" value="${p.custo || p.c || 0}" step="0.01" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-venda" value="${vBruto}" step="0.01" oninput="window.calcOSTotal()">
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+  }
   if($('containerPecasOS')) $('containerPecasOS').appendChild(div);
 };
 
 window.selecionarPecaOS = function(sel) {
   const opt = sel.options[sel.selectedIndex];
-  sel.parentElement.querySelector('.peca-venda').value = opt.dataset.venda || 0;
+  if (opt.value === '__avulsa__') {
+    // Transforma a linha em entrada manual (igual ao modo governo, mas sem código original)
+    const row = sel.parentElement;
+    row.dataset.pecaAvulsa = '1';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 80px 90px 90px 32px;gap:8px;align-items:center;background:rgba(255,165,0,0.06);padding:4px;border-radius:3px;border:1px solid rgba(255,165,0,0.25);';
+    row.innerHTML = `
+      <input type="text" class="j-input peca-desc-livre" placeholder="Descrição da peça" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-qtd" value="1" min="1" placeholder="Qtd" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-custo" value="0" step="0.01" placeholder="Custo" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-venda" value="0" step="0.01" placeholder="Venda" oninput="window.calcOSTotal()">
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+    row.querySelector('.peca-desc-livre').focus();
+  } else {
+    sel.parentElement.querySelector('.peca-venda').value = opt.dataset.venda || 0;
+  }
   window.calcOSTotal();
 };
 
 window.calcOSTotal = function() {
     let total = 0;
-    
+
+    // Desconto: prioriza campo da OS; fallback para padrão do cadastro do cliente
+    const ehGov = typeof window._osClienteGovernamental === 'function' && window._osClienteGovernamental();
+    const dadosGov = ehGov && typeof window._osDadosGovernamental === 'function' ? window._osDadosGovernamental() : null;
+    const _osDescMOField = document.getElementById('osDescMO');
+    const _osDescPecaField = document.getElementById('osDescPeca');
+    const _osDescMOVal = _osDescMOField?.value?.trim();
+    const _osDescPecaVal = _osDescPecaField?.value?.trim();
+    // Se preenchido na OS, usa ele; senão usa padrão do cliente (já em decimal 0-1)
+    const descMO   = _osDescMOVal   !== '' && _osDescMOVal   != null ? parseFloat(_osDescMOVal)/100   : (dadosGov ? parseFloat(dadosGov.descMO   || 0) : 0);
+    const descPeca = _osDescPecaVal !== '' && _osDescPecaVal != null ? parseFloat(_osDescPecaVal)/100 : (dadosGov ? parseFloat(dadosGov.descPeca || 0) : 0);
+
     document.querySelectorAll('#containerItensOS > div').forEach(div => {
         const q = parseFloat(div.querySelector('.os-item-qtd')?.value || 0);
         const v = parseFloat(div.querySelector('.os-item-venda')?.value || 0);
@@ -335,13 +603,23 @@ window.calcOSTotal = function() {
     });
 
     document.querySelectorAll('#containerServicosOS > div').forEach(row => {
-        total += parseFloat(row.querySelector('.serv-valor')?.value || 0);
+        const vBruto = parseFloat(row.querySelector('.serv-valor')?.value || 0);
+        const vFinal = +(vBruto * (1 - descMO)).toFixed(2);
+        // Atualiza badge de desconto em tempo real
+        const descBox = row.querySelector('.serv-desc-val');
+        if (descBox) descBox.textContent = 'R$ ' + vFinal.toFixed(2).replace('.', ',');
+        total += vFinal;
     });
-  
+
     document.querySelectorAll('#containerPecasOS > div').forEach(row => {
-        const qtd = parseFloat(row.querySelector('.peca-qtd')?.value || 0);
-        const venda = parseFloat(row.querySelector('.peca-venda')?.value || 0);
-        total += qtd * venda;
+        const qtd   = parseFloat(row.querySelector('.peca-qtd')?.value   || 0);
+        const venda = parseFloat(row.querySelector('.peca-venda')?.value  || 0);
+        const vBruto = qtd * venda;
+        const vFinal = +(vBruto * (1 - descPeca)).toFixed(2);
+        // Atualiza badge de desconto em tempo real
+        const descBox = row.querySelector('.peca-desc-val');
+        if (descBox) descBox.textContent = 'R$ ' + vFinal.toFixed(2).replace('.', ',');
+        total += vFinal;
     });
 
     if ($('osTotalVal')) $('osTotalVal').innerText = total.toFixed(2).replace('.', ',');
@@ -378,21 +656,46 @@ window.salvarOS = async function() {
   document.querySelectorAll('#containerServicosOS > div').forEach(row => {
     const desc = row.querySelector('.serv-desc')?.value || '';
     const valor = parseFloat(row.querySelector('.serv-valor')?.value || 0);
-    if (desc || valor > 0) { servicos.push({ desc, valor }); totalMaoObra += valor; }
+    const tempoStr = row.querySelector('.serv-tempo')?.value || '';
+    const tempo = parseFloat(String(tempoStr).replace(',', '.')) || 0;
+    const codigoTabela = row.dataset?.codigoTabela || '';
+    const sistemaTabela = row.dataset?.sistemaTabela || '';
+    if (desc || valor > 0) { servicos.push({ desc, valor, tempo, codigoTabela, sistemaTabela }); totalMaoObra += valor; }
   });
 
   const pecas = [];
   let totalPecas = 0;
   document.querySelectorAll('#containerPecasOS > div').forEach(row => {
-    const sel = row.querySelector('.peca-sel'); 
+    // Peça AVULSA (cliente governo)
+    if (row.dataset?.pecaAvulsa === '1') {
+      const codigo = row.querySelector('.peca-codigo')?.value || '';
+      const descLivre = row.querySelector('.peca-desc-livre')?.value || '';
+      const qtd = parseFloat(row.querySelector('.peca-qtd')?.value || 1);
+      const venda = parseFloat(row.querySelector('.peca-venda')?.value || 0);
+      if (descLivre || codigo) {
+        totalPecas += (qtd * venda);
+        pecas.push({
+          avulsa: true,        // marcador
+          estoqueId: '',       // não baixa estoque
+          codigo: codigo,
+          desc: descLivre,
+          qtd: qtd,
+          custo: 0,
+          venda: venda
+        });
+      }
+      return;
+    }
+    // Peça normal (estoque)
+    const sel = row.querySelector('.peca-sel');
     const opt = sel?.options[sel.selectedIndex];
     const qtd = parseFloat(row.querySelector('.peca-qtd')?.value || 1);
     const venda = parseFloat(row.querySelector('.peca-venda')?.value || 0);
     const custo = parseFloat(row.querySelector('.peca-custo')?.value || 0);
     totalPecas += (qtd * venda);
-    
+
     pecas.push({
-      estoqueId: sel?.value, 
+      estoqueId: sel?.value,
       desc: opt?.dataset.desc || opt?.text || '',
       qtd: qtd, custo: custo, venda: venda
     });
@@ -421,6 +724,38 @@ window.salvarOS = async function() {
   if ($v('osMec')) payload.mecId = $v('osMec');
   if ($v('osData')) payload.data = $v('osData');
   if ($v('osKm')) payload.km = $v('osKm');
+  if ($v('osEntregueA')) payload.entreguePara = $v('osEntregueA');
+  // Desconto personalizado desta OS (converte % para decimal)
+  const _descMOval = $v('osDescMO');
+  const _descPecaval = $v('osDescPeca');
+  if (_descMOval !== '' && _descMOval != null) payload.descMO = parseFloat(_descMOval)/100;
+  if (_descPecaval !== '' && _descPecaval != null) payload.descPeca = parseFloat(_descPecaval)/100;
+  // Peças realmente instaladas (somente dono)
+  const _pecasReais = [];
+  document.querySelectorAll('#containerPecasReais > div').forEach(row => {
+    const pr = {
+      codigo: row.querySelector('.pr-codigo')?.value?.trim() || '',
+      desc: row.querySelector('.pr-desc')?.value?.trim() || '',
+      qtd: parseFloat(row.querySelector('.pr-qtd')?.value || 1),
+      fornecedor: row.querySelector('.pr-fornec')?.value?.trim() || '',
+      nf: row.querySelector('.pr-nf')?.value?.trim() || '',
+      valorCompra: parseFloat(row.querySelector('.pr-valor')?.value || 0)
+    };
+    if (pr.desc || pr.codigo) _pecasReais.push(pr);
+  });
+  if (_pecasReais.length > 0) payload.pecasReais = _pecasReais;
+  // LOTE C — Persistir próxima revisão (data e/ou KM) para o cliente ver
+  if ($v('osProxRev')) payload.proxRev = $v('osProxRev');
+  if ($v('osProxKm'))  payload.proxKm  = $v('osProxKm');
+  // Checklist tri-state (cada campo vale '', 'ok', 'atencao' ou 'critico')
+  ['chkPainel','chkPressao','chkCarroceria','chkDocumentos'].forEach(f => {
+    const v = $v(f);
+    if (v) payload[f] = v;
+  });
+  if ($v('chkObs')) payload.chkObs = $v('chkObs');
+  if ($v('chkPneuDia')) payload.chkPneuDia = $v('chkPneuDia');
+  if ($v('chkPneuTra')) payload.chkPneuTra = $v('chkPneuTra');
+  if ($v('chkComb')) payload.chkComb = $v('chkComb');
   
   if (itens.length > 0) payload.pecasLegacy = itens;
   if (servicos.length > 0) payload.servicos = servicos;
@@ -463,22 +798,50 @@ window.salvarOS = async function() {
           registouAlgo = true;
       }
 
-      // 3. Verificação Individual de Checklist
+      // 3. Verificação Individual de Checklist (agora tri-state: ok/atencao/critico)
       const mapCheck = { 
           chkPainel: 'Painel/Instrumentos', 
           chkPressao: 'Pressão dos Pneus', 
           chkCarroceria: 'Carroceria/Pintura', 
           chkDocumentos: 'Documentos' 
       };
+      const mapEstadoLabel = { ok: '✓ OK', atencao: '⚠ ATENÇÃO', critico: '✕ CRÍTICO', '': 'neutro' };
       ['chkPainel', 'chkPressao', 'chkCarroceria', 'chkDocumentos'].forEach(chk => {
-          const oldVal = !!oldOS[chk];
-          const newVal = !!payload[chk];
+          // Compatibilidade: antigo era boolean (true/false), novo é string ('ok'/'atencao'/'critico')
+          const oldValRaw = oldOS[chk];
+          const newValRaw = payload[chk];
+          const oldVal = (oldValRaw === true || oldValRaw === 'ok') ? 'ok'
+                       : (oldValRaw === 'atencao' || oldValRaw === 'critico') ? oldValRaw : '';
+          const newVal = newValRaw || '';
           if (oldVal !== newVal) {
-              const estado = newVal ? 'Marcou' : 'Desmarcou';
-              tl.push({ dt: new Date().toISOString(), user: funcUser, acao: `${estado} o item de inspeção: ${mapCheck[chk]}` });
+              const labelDe = mapEstadoLabel[oldVal] || 'neutro';
+              const labelPara = mapEstadoLabel[newVal] || 'neutro';
+              tl.push({ dt: new Date().toISOString(), user: funcUser, acao: `Checklist "${mapCheck[chk]}": ${labelDe} → ${labelPara}` });
               registouAlgo = true;
           }
       });
+
+      // 3b. Mudança de mecânico responsável
+      if (oldOS.mecId !== payload.mecId && payload.mecId) {
+          const mecOld = (J.equipe || []).find(m => m.id === oldOS.mecId);
+          const mecNovo = (J.equipe || []).find(m => m.id === payload.mecId);
+          tl.push({ dt: new Date().toISOString(), user: funcUser, acao: `Mecânico responsável: ${mecOld?.nome || '—'} → ${mecNovo?.nome || '—'}` });
+          registouAlgo = true;
+      }
+
+      // 3c. Mudança de KM
+      if (oldOS.km && payload.km && String(oldOS.km).trim() !== String(payload.km).trim()) {
+          tl.push({ dt: new Date().toISOString(), user: funcUser, acao: `KM do veículo: ${oldOS.km} → ${payload.km}` });
+          registouAlgo = true;
+      }
+
+      // 3d. Mudança de cliente vinculado
+      if (oldOS.clienteId && payload.clienteId && oldOS.clienteId !== payload.clienteId) {
+          const cOld = (J.clientes || []).find(c => c.id === oldOS.clienteId);
+          const cNovo = (J.clientes || []).find(c => c.id === payload.clienteId);
+          tl.push({ dt: new Date().toISOString(), user: funcUser, acao: `Cliente vinculado: "${cOld?.nome || '—'}" → "${cNovo?.nome || '—'}"` });
+          registouAlgo = true;
+      }
 
       // 4. Identificação de Peças (Adições, Remoções, Alterações de Qtd/Valor)
       const oldPecas = oldOS.pecas || [];
@@ -583,30 +946,156 @@ window.salvarOS = async function() {
         }
       }
       
-      const formasPagas = ['Dinheiro', 'PIX', 'Débito', 'Crédito à Vista'];
-      payload.pgtoForma = $v('osPgtoForma'); 
-      payload.pgtoData = $v('osPgtoData');
-      
-      if(payload.pgtoForma && payload.pgtoData) {
-        const statusFin = formasPagas.includes(payload.pgtoForma) ? 'Pago' : 'Pendente';
-        const parcelas = parseInt($v('osPgtoParcelas') || 1);
+      // ═══════════════════════════════════════════════════════════════════
+      // LÓGICA FINANCEIRA COERENTE (LOTE A - refatoração completa)
+      // ═══════════════════════════════════════════════════════════════════
+      // Conceitos importantes:
+      //  • formaRecebimento (como cliente pagou): Dinheiro, PIX, Débito,
+      //    Crédito (1x / 2x / 3x...), Boleto, Crediário próprio
+      //  • Do ponto de vista do CLIENTE, se pagou no cartão, está QUITADO
+      //  • Do ponto de vista da OFICINA, se foi cartão de crédito Nx, ela
+      //    vai receber N parcelas DA OPERADORA (não do cliente)
+      //  • Se foi Boleto/Crediário próprio, aí sim o CLIENTE deve em N parcelas
+      //
+      // Campos na OS:
+      //   payload.pgtoForma    = Dinheiro / PIX / Débito / Crédito / Boleto / Crediário
+      //   payload.pgtoParcelas = 1, 2, 3, 4, 6, 10, 12...
+      //   payload.pgtoData     = data em que o CLIENTE efetuou o pagamento
+      //   payload.pgtoQuitado  = true se cliente pagou por completo (à vista/cartão)
+      //                         false se vai parcelar no crediário/boleto
+      // ═══════════════════════════════════════════════════════════════════
+      const formasAVistaCliente = ['Dinheiro', 'PIX', 'Débito'];     // cliente paga e pronto
+      const formasCartaoCredito = ['Crédito à Vista', 'Crédito', 'Crédito Parcelado']; // cliente quita, operadora paga a oficina em parcelas
+      const formasCreditoOficina = ['Boleto', 'Crediário', 'Boleto (Pendente)']; // cliente DEVE parcelas à oficina
+
+      payload.pgtoForma    = $v('osPgtoForma');
+      payload.pgtoData     = $v('osPgtoData');
+      payload.pgtoParcelas = parseInt($v('osPgtoParcelas') || 1);
+
+      if (payload.pgtoForma && payload.pgtoData) {
+        const parcelas = payload.pgtoParcelas;
         const valorParc = payload.total / parcelas;
-        
-        for (let i = 0; i < parcelas; i++) {
-          const d = new Date(payload.pgtoData || new Date()); 
-          d.setMonth(d.getMonth() + i);
-          db.collection('financeiro').add({
-            tenantId: J.tid, tipo: 'Entrada', status: statusFin,
-            desc: `O.S. ${payload.placa || J.veiculos.find(v => v.id === payload.veiculoId)?.placa || ''} — ${J.clientes.find(c => c.id === payload.clienteId)?.nome || payload.cliente || ''} ${parcelas > 1 ? `(${i + 1}/${parcelas})` : ''}`,
-            valor: valorParc, pgto: payload.pgtoForma, venc: d.toISOString().split('T')[0],
+        const placaRef  = payload.placa || J.veiculos.find(v => v.id === payload.veiculoId)?.placa || '';
+        const cliRef    = J.clientes.find(c => c.id === payload.clienteId)?.nome || payload.cliente || '';
+
+        const pgtoBase = payload.pgtoForma.trim();
+
+        // Apaga recebimentos anteriores desta OS (evita duplicação ao editar)
+        if (osId) {
+          try {
+            const snap = await db.collection('financeiro').where('osId', '==', osId).get();
+            for (const docSnap of snap.docs) {
+              await db.collection('financeiro').doc(docSnap.id).delete();
+            }
+          } catch(e) { console.warn('Limpeza financeiro OS:', e); }
+        }
+
+        // Decide o tipo de fluxo financeiro pela forma de pagamento
+        if (formasAVistaCliente.some(f => pgtoBase.toLowerCase().includes(f.toLowerCase()))) {
+          // ═══ CLIENTE PAGOU À VISTA (Dinheiro/PIX/Débito) ═══
+          // 1 recebimento liquidado, quitado na data informada
+          payload.pgtoQuitado = true;
+          payload.pgtoResumoCliente = `${pgtoBase} à vista`;
+          await db.collection('financeiro').add({
+            tenantId:  J.tid,
+            tipo:      'Entrada',
+            status:    'Pago',
+            desc:      `O.S. ${placaRef} — ${cliRef}`,
+            valor:     payload.total,
+            pgto:      pgtoBase,
+            venc:      payload.pgtoData,
+            dataPgto:  payload.pgtoData,
+            osId:      osId || null,
+            clienteId: payload.clienteId || null,
+            quitadoPeloCliente: true,
+            origem: 'recebimento_os_avista',
+            createdAt: new Date().toISOString()
+          });
+
+        } else if (formasCartaoCredito.some(f => pgtoBase.toLowerCase().includes(f.toLowerCase()))) {
+          // ═══ CLIENTE QUITOU NO CARTÃO DE CRÉDITO (1x, 2x, Nx) ═══
+          // Para o cliente: ESTÁ QUITADO. Não deve nada.
+          // Para a oficina: vai receber da OPERADORA em N parcelas (D+30, D+60...)
+          payload.pgtoQuitado = true;
+          payload.pgtoResumoCliente = parcelas > 1
+            ? `Cartão de Crédito em ${parcelas}x`
+            : `Cartão de Crédito à vista`;
+
+          for (let i = 0; i < parcelas; i++) {
+            const dVenc = new Date(payload.pgtoData);
+            dVenc.setDate(dVenc.getDate() + 30 * (i + 1));  // D+30, D+60, D+90...
+            await db.collection('financeiro').add({
+              tenantId:   J.tid,
+              tipo:       'Entrada',
+              status:     'A Receber',
+              desc:       `Recebimento operadora — O.S. ${placaRef} — ${cliRef} ${parcelas > 1 ? `(${i + 1}/${parcelas})` : ''}`,
+              valor:      valorParc,
+              pgto:       pgtoBase,
+              venc:       dVenc.toISOString().split('T')[0],
+              osId:       osId || null,
+              clienteId:  payload.clienteId || null,
+              quitadoPeloCliente: true,  // IMPORTANTE: cliente já quitou
+              aReceberDe: 'Operadora de Cartão',
+              origem: 'recebimento_os_cartao',
+              createdAt: new Date().toISOString()
+            });
+          }
+
+        } else if (formasCreditoOficina.some(f => pgtoBase.toLowerCase().includes(f.toLowerCase()))) {
+          // ═══ BOLETO / CREDIÁRIO PRÓPRIO (cliente DEVE à oficina) ═══
+          // Aqui sim criamos N títulos "a receber do cliente"
+          payload.pgtoQuitado = false;
+          payload.pgtoResumoCliente = parcelas > 1
+            ? `${pgtoBase} em ${parcelas}x (pendente)`
+            : `${pgtoBase} (pendente)`;
+
+          for (let i = 0; i < parcelas; i++) {
+            const dVenc = new Date(payload.pgtoData);
+            dVenc.setMonth(dVenc.getMonth() + i);
+            await db.collection('financeiro').add({
+              tenantId:   J.tid,
+              tipo:       'Entrada',
+              status:     'Pendente',
+              desc:       `O.S. ${placaRef} — ${cliRef} ${parcelas > 1 ? `(${i + 1}/${parcelas})` : ''}`,
+              valor:      valorParc,
+              pgto:       pgtoBase,
+              venc:       dVenc.toISOString().split('T')[0],
+              osId:       osId || null,
+              clienteId:  payload.clienteId || null,
+              quitadoPeloCliente: false,  // cliente ainda deve
+              aReceberDe: 'Cliente',
+              origem: 'recebimento_os_credito_oficina',
+              createdAt: new Date().toISOString()
+            });
+          }
+
+        } else {
+          // ═══ OUTRAS FORMAS / INDEFINIDO ═══
+          // Cria um único título pendente para análise manual
+          payload.pgtoQuitado = false;
+          payload.pgtoResumoCliente = `${pgtoBase} — verificar`;
+          await db.collection('financeiro').add({
+            tenantId:  J.tid,
+            tipo:      'Entrada',
+            status:    'Pendente',
+            desc:      `O.S. ${placaRef} — ${cliRef}`,
+            valor:     payload.total,
+            pgto:      pgtoBase,
+            venc:      payload.pgtoData,
+            osId:      osId || null,
+            clienteId: payload.clienteId || null,
+            quitadoPeloCliente: false,
+            origem: 'recebimento_os_outros',
             createdAt: new Date().toISOString()
           });
         }
-        
+
+        // Baixa de estoque (independente da forma de pagamento) — exceto peças avulsas (cliente governo)
         for (const p of pecas) {
+          if (p.avulsa) continue;  // peças avulsas NÃO baixam estoque
           if (p.estoqueId) {
             const item = J.estoque.find(x => x.id === p.estoqueId);
-            if (item) db.collection('estoqueItems').doc(p.estoqueId).update({ qtd: Math.max(0, (item.qtd || 0) - p.qtd) });
+            if (item) await db.collection('estoqueItems').doc(p.estoqueId).update({ qtd: Math.max(0, (item.qtd || 0) - p.qtd) });
           }
         }
       }
@@ -868,3 +1357,286 @@ window.gerarPDFOS = async function() {
 };
 
 /* Powered by thIAguinho Soluções Digitais */
+
+
+// ══════════════════════════════════════════════════════════════════════
+// IMPORTAR PEÇAS DO SISTEMA CÍLIA (PDF ou XML)
+// ══════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════
+// PEÇAS REAIS INSTALADAS — linha editável
+// ══════════════════════════════════════════════════════════════════════
+window.adicionarPecaReal = function() {
+  window.adicionarPecaRealRow({});
+};
+
+window.adicionarPecaRealRow = function(p) {
+  const ct = document.getElementById('containerPecasReais');
+  if (!ct) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:grid;grid-template-columns:110px 1fr 55px 110px 130px 110px 32px;gap:6px;align-items:center;background:rgba(255,59,59,0.05);padding:6px;border-radius:3px;border:1px solid rgba(255,59,59,0.2);';
+  div.innerHTML = `
+    <input type="text" class="j-input pr-codigo" value="${_escVal(p.codigo||'')}" placeholder="Cód. real" style="font-family:var(--fm);font-size:0.75rem;">
+    <input type="text" class="j-input pr-desc" value="${_escVal(p.desc||'')}" placeholder="Descrição real instalada" oninput="">
+    <input type="number" class="j-input pr-qtd" value="${p.qtd||1}" min="1" placeholder="Qtd">
+    <input type="text" class="j-input pr-fornec" value="${_escVal(p.fornecedor||'')}" placeholder="Fornecedor">
+    <input type="text" class="j-input pr-nf" value="${_escVal(p.nf||'')}" placeholder="Nº Nota Fiscal">
+    <input type="number" class="j-input pr-valor" value="${p.valorCompra||0}" step="0.01" placeholder="R$ compra">
+    <button type="button" onclick="this.parentElement.remove()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+  `;
+  ct.appendChild(div);
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// BUSCA HISTÓRICO POR PLACA + SERVIÇO/PEÇA
+// ══════════════════════════════════════════════════════════════════════
+window.buscarHistoricoOS = function() {
+  const placa = (document.getElementById('histBuscaPlaca')?.value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const termo = (document.getElementById('histBuscaTermo')?.value || '').trim().toLowerCase();
+  const el = document.getElementById('histBuscaResultado');
+  if (!el) return;
+  if (!placa && !termo) { el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;">Digite a placa e/ou o serviço/peça.</div>'; return; }
+
+  const hits = (window.J?.os || []).filter(o => {
+    const placaOS = (o.placa||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const matchPlaca = !placa || placaOS === placa;
+    if (!matchPlaca) return false;
+    if (!termo) return true;
+    const textoOS = [
+      ...(o.servicos||[]).map(s=>(s.desc||'').toLowerCase()),
+      ...(o.pecas||[]).map(p=>((p.desc||'')+(p.codigo||'')).toLowerCase()),
+      ...(o.pecasReais||[]).map(p=>((p.desc||'')+(p.codigo||'')).toLowerCase()),
+      (o.diagnostico||'').toLowerCase(),
+      (o.relato||'').toLowerCase()
+    ].join(' ');
+    return textoOS.includes(termo);
+  });
+
+  if (!hits.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-family:var(--fm);font-size:0.8rem;padding:10px 0;">Nenhuma OS encontrada${placa?' para placa '+placa:''}${termo?' com "'+termo+'"':''}.</div>`;
+    return;
+  }
+
+  const html = hits.map(o => {
+    const cli = (window.J?.clientes||[]).find(c=>c.id===o.clienteId)||{};
+    const veic = (window.J?.veiculos||[]).find(v=>v.id===o.veiculoId)||{};
+    const servMatches = (o.servicos||[]).filter(s=>!termo||(s.desc||'').toLowerCase().includes(termo));
+    const pecMatches  = (o.pecas||[]).filter(p=>!termo||((p.desc||'')+(p.codigo||'')).toLowerCase().includes(termo));
+    const reaisMtch   = (o.pecasReais||[]).filter(p=>!termo||((p.desc||'')+(p.codigo||'')).toLowerCase().includes(termo));
+    return `<div style="background:var(--surf3);border:1px solid var(--border);border-radius:3px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+        <div>
+          <span style="font-family:var(--fm);font-size:0.7rem;color:var(--cyan);font-weight:700;">OS #${(o.id||'').slice(-6).toUpperCase()}</span>
+          <span style="font-family:var(--fm);font-size:0.65rem;color:var(--muted);margin-left:10px;">${o.data||''}</span>
+          <span style="font-family:var(--fm);font-size:0.65rem;color:var(--muted);margin-left:10px;">${cli.nome||o.cliente||''}</span>
+        </div>
+        <span style="font-family:var(--fm);font-size:0.7rem;color:var(--success);font-weight:700;">R$ ${parseFloat(o.total||0).toFixed(2).replace('.',',')}</span>
+      </div>
+      ${servMatches.length?`<div style="font-size:0.75rem;margin-bottom:4px;"><strong style="color:var(--cyan);">Serviços:</strong> ${servMatches.map(s=>`${s.desc||''} (${s.tempo||0}h)`).join(' | ')}</div>`:''}
+      ${pecMatches.length?`<div style="font-size:0.75rem;margin-bottom:4px;"><strong style="color:var(--success);">Peças orç.:</strong> ${pecMatches.map(p=>`${p.desc||p.codigo||''} x${p.qtd||1}`).join(' | ')}</div>`:''}
+      ${reaisMtch.length?`<div style="font-size:0.75rem;margin-bottom:4px;"><strong style="color:var(--danger);">Peças reais:</strong> ${reaisMtch.map(p=>`${p.desc||p.codigo||''} x${p.qtd||1} — NF:${p.nf||'-'} ${p.fornecedor||''}`).join(' | ')}</div>`:''}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="font-family:var(--fm);font-size:0.65rem;color:var(--muted);margin-bottom:6px;">${hits.length} OS encontrada(s)</div>${html}`;
+};
+
+window.importarCilia = async function(input) {
+  if (!input || !input.files || !input.files.length) return;
+  const file = input.files[0];
+  const ext = file.name.split('.').pop().toLowerCase();
+  input.value = '';
+
+  if (ext === 'xml') {
+    _ciliaProcessarXML(file);
+  } else if (ext === 'pdf') {
+    _ciliaProcessarPDF(file);
+  } else {
+    if (typeof window.toast === 'function') window.toast('Formato inválido. Use XML ou PDF do Cília.', 'err');
+  }
+};
+
+function _ciliaAdicionarPecas(pecas) {
+  if (!pecas || !pecas.length) {
+    if (typeof window.toast === 'function') window.toast('Nenhuma peça encontrada no arquivo Cília.', 'warn');
+    return;
+  }
+  const ehGov = typeof window._osClienteGovernamental === 'function' && window._osClienteGovernamental();
+  const dadosGov = ehGov && typeof window._osDadosGovernamental === 'function' ? window._osDadosGovernamental() : null;
+  const descPeca = dadosGov ? parseFloat(dadosGov.descPeca || 0) : 0;
+
+  pecas.forEach(p => {
+    const div = document.createElement('div');
+    const vBruto = parseFloat(p.venda || p.valor || 0);
+    const qtd = parseFloat(p.qtd || 1);
+    const vFinal = +(qtd * vBruto * (1 - descPeca)).toFixed(2);
+    const colsGov = (ehGov && descPeca > 0) ? '120px 1fr 60px 100px 80px 32px' : '120px 1fr 60px 100px 32px';
+    const badgePeca = (ehGov && descPeca > 0) ? `
+      <div class="peca-desc-box" style="font-family:var(--fm);font-size:0.72rem;color:var(--ok);text-align:right;line-height:1.2;">
+        <div style="color:var(--purple,#A78BFA);font-size:0.65rem;">-${(descPeca*100).toFixed(0)}%</div>
+        <div class="peca-desc-val">R$ ${vFinal.toFixed(2).replace('.',',')}</div>
+      </div>` : '';
+
+    div.style.cssText = `display:grid;grid-template-columns:${colsGov};gap:8px;align-items:center;background:rgba(0,212,255,0.06);padding:8px;border-radius:3px;border:1px solid rgba(0,212,255,0.25);`;
+    div.dataset.pecaAvulsa = '1';
+    div.dataset.cilia = '1';
+    div.innerHTML = `
+      <input type="text" class="j-input peca-codigo" value="${_escVal(p.codigo)}" placeholder="Código OEM" style="font-family:var(--fm);font-size:0.78rem;" title="Código OEM (editável)">
+      <input type="text" class="j-input peca-desc-livre" value="${_escVal(p.desc)}" placeholder="Descrição da peça" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-qtd" value="${qtd}" min="1" oninput="window.calcOSTotal()">
+      <input type="number" class="j-input peca-venda" value="${vBruto}" step="0.01" placeholder="Valor unit." oninput="window.calcOSTotal()" title="Valor unitário (editável)">
+      ${badgePeca}
+      <button type="button" onclick="this.parentElement.remove();window.calcOSTotal()" style="background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.3);border-radius:2px;color:var(--danger);cursor:pointer;width:32px;height:32px;">✕</button>
+    `;
+    if (typeof $ === 'function' && $('containerPecasOS')) {
+      $('containerPecasOS').appendChild(div);
+    }
+  });
+
+  if (typeof window.calcOSTotal === 'function') window.calcOSTotal();
+  if (typeof window.toast === 'function') window.toast(`✓ ${pecas.length} peça(s) importada(s) do Cília`, 'ok');
+}
+
+function _escVal(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── XML: estrutura esperada do Cília ──────────────────────────────────
+// <Pecas><Peca><Codigo>XX</Codigo><Descricao>YY</Descricao><Quantidade>1</Quantidade><PrecoUnitario>100.00</PrecoUnitario></Peca></Pecas>
+// Também tenta variações comuns de tag
+function _ciliaProcessarXML(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(e.target.result, 'application/xml');
+      if (xml.querySelector('parsererror')) throw new Error('XML inválido ou corrompido.');
+
+      // Tenta vários nomes de tag de item
+      const tagsCandidatas = ['Peca','peca','PECA','Item','item','ITEM','Produto','produto'];
+      let nos = [];
+      for (const tag of tagsCandidatas) {
+        nos = Array.from(xml.querySelectorAll(tag));
+        if (nos.length) break;
+      }
+      if (!nos.length) throw new Error('Nenhuma tag de peça reconhecida no XML. Verifique o arquivo Cília.');
+
+      const pecas = nos.map(n => {
+        const t = tag => n.querySelector(tag)?.textContent?.trim() || '';
+        return {
+          codigo: t('Codigo') || t('codigo') || t('CODIGO') || t('CodigoOEM') || t('codigoOem') || t('CodPeca') || '',
+          desc:   t('Descricao') || t('descricao') || t('DESCRICAO') || t('Descr') || t('Nome') || t('nome') || '',
+          qtd:    parseFloat(t('Quantidade') || t('quantidade') || t('Qtd') || t('qtd') || '1') || 1,
+          venda:  parseFloat((t('PrecoUnitario') || t('precoUnitario') || t('Preco') || t('preco') || t('ValorUnitario') || '0').replace(',','.')) || 0
+        };
+      }).filter(p => p.desc || p.codigo);
+
+      _ciliaAdicionarPecas(pecas);
+    } catch(err) {
+      if (typeof window.toast === 'function') window.toast('Erro ao ler XML Cília: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// ── PDF Cília: extrai texto e parseia tabela de peças ────────────────
+// Formato real Cília: "T R&I 0,00 1.00 DESCRIÇÃO Cód: CODIGO Oficina R$ PRECO_BRUTO % DESC R$ PRECO_LIQ"
+// Requer pdf.js (CDN) — carrega dinamicamente se não estiver presente
+async function _ciliaProcessarPDF(file) {
+  if (typeof window.toast === 'function') window.toast('Lendo PDF do Cília...', 'warn');
+  try {
+    // Carrega pdf.js dinamicamente se necessário
+    if (!window.pdfjsLib) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    // ── Coleta todos os spans com posição (x, y) para reconstruir linhas ──
+    const allSpans = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      tc.items.forEach(item => {
+        allSpans.push({
+          text: item.str,
+          x: Math.round(item.transform[4]),
+          y: Math.round(item.transform[5])
+        });
+      });
+    }
+
+    // Agrupa spans por linha (mesma coordenada Y ±3px), ordenado por X
+    const linhasMap = {};
+    allSpans.forEach(sp => {
+      const yKey = Math.round(sp.y / 3) * 3;
+      if (!linhasMap[yKey]) linhasMap[yKey] = [];
+      linhasMap[yKey].push(sp);
+    });
+    const linhasOrdenadas = Object.keys(linhasMap)
+      .map(Number)
+      .sort((a, b) => b - a) // PDF: Y cresce de baixo para cima
+      .map(y => linhasMap[y].sort((a, b) => a.x - b.x).map(s => s.text).join(' ').trim())
+      .filter(Boolean);
+
+    const pecas = [];
+
+    for (const linha of linhasOrdenadas) {
+      // ── PADRÃO PRINCIPAL DO CÍLIA ──────────────────────────────────
+      // Ex: "T R&I 0,00 1.00 BOMBA DE COMBUSTÍVEL Cód: 172029382R Oficina R$ 1.795,30 % 48,00 R$ 933,56"
+      // Captura: operação | qtd | descrição | código | preço bruto | % desconto | preço líquido
+      const mCilia = linha.match(
+        /(?:T|R)\s+R&I\s+[\d,\.]+\s+([\d,\.]+)\s+(.+?)\s+Cód:\s*([A-Z0-9\-\.]+)\s+Oficina\s+R\$\s*([\d\.,]+)\s+%\s*([\d,\.]+)\s+R\$\s*([\d\.,]+)/i
+      );
+      if (mCilia) {
+        const qtd   = parseFloat(mCilia[1].replace(',','.')) || 1;
+        const desc  = mCilia[2].trim();
+        const cod   = mCilia[3].trim();
+        const pBruto = parseFloat(mCilia[4].replace(/\./g,'').replace(',','.')) || 0;
+        const pLiq   = parseFloat(mCilia[6].replace(/\./g,'').replace(',','.')) || 0;
+        // Usa preço líquido (já com desconto do contrato)
+        pecas.push({ codigo: cod, desc, qtd, venda: pLiq > 0 ? pLiq : pBruto });
+        continue;
+      }
+
+      // ── PADRÃO SIMPLES (sem operação T/R&I) ──────────────────────
+      // Ex: "172029382R  BOMBA DE COMBUSTÍVEL  1  R$ 933,56"
+      const mSimples = linha.match(/^([A-Z0-9\-\.\/]{4,25})\s{2,}(.+?)\s{2,}(\d+(?:[,\.]\d+)?)\s+R\$\s*([\d\.,]+)/);
+      if (mSimples) {
+        const vStr = mSimples[4].replace(/\./g,'').replace(',','.');
+        pecas.push({
+          codigo: mSimples[1].trim(),
+          desc:   mSimples[2].trim(),
+          qtd:    parseFloat(mSimples[3].replace(',','.')) || 1,
+          venda:  parseFloat(vStr) || 0
+        });
+        continue;
+      }
+
+      // ── PADRÃO LEGADO (espaços duplos) ────────────────────────────
+      // Ex: "5207381  AMORTECEDOR DIANT DIR  1  285,90"
+      const mLeg = linha.match(/^([A-Z0-9\-\.]{4,20})\s{2,}(.+?)\s{2,}(\d+)\s{2,}([\d\.,]+)\s*$/);
+      if (mLeg) {
+        const vStr = mLeg[4].replace(/\./g,'').replace(',','.');
+        pecas.push({ codigo: mLeg[1].trim(), desc: mLeg[2].trim(), qtd: parseInt(mLeg[3])||1, venda: parseFloat(vStr)||0 });
+      }
+    }
+
+    if (!pecas.length) {
+      if (typeof window.toast === 'function') window.toast('Não foi possível extrair peças do PDF. Exporte do Cília em XML para melhor resultado.', 'warn');
+      return;
+    }
+    _ciliaAdicionarPecas(pecas);
+  } catch(err) {
+    if (typeof window.toast === 'function') window.toast('Erro ao ler PDF Cília: ' + err.message, 'err');
+  }
+}
+

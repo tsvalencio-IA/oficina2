@@ -2,9 +2,26 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Portal do Cliente</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Portal do Cliente — thIAguinho</title>
+<!-- ═══ PWA: instalável como app na tela inicial do celular ═══ -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00D4FF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="thIAguinho">
+<meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Exo+2:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<script>
+/* Registra o Service Worker para PWA funcionar */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('service-worker.js')
+      .then(function(reg) { console.log('SW registrado:', reg.scope); })
+      .catch(function(err) { console.warn('SW falhou:', err); });
+  });
+}
+</script>
 <style>
 body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 2', sans-serif; margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -190,7 +207,6 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
       <button class="tab-btn" onclick="switchCliTab('tabChat', this)">💬 CHAT <span class="tab-badge" id="cliChatBadge">0</span></button>
       <button class="tab-btn" onclick="switchCliTab('tabFin', this)">💳 EXTRATO</button>
       <button class="tab-btn" onclick="switchCliTab('tabAgd', this)">📅 AGENDAR</button>
-      <button class="tab-btn" onclick="switchCliTab('tabIA', this)" style="color:var(--text-muted)">🤖 IA</button>
       <button class="tab-btn" onclick="switchCliTab('tabOBD', this)" style="color:var(--text-muted)">🔌 OBD</button>
     </div>
   </div>
@@ -226,30 +242,6 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
         <button class="btn btn-brand" onclick="_salvarAgendamentoCli()">ENVIAR SOLICITAÇÃO</button>
       </div>
       <div id="renderAgdArea"></div>
-    </div>
-
-    <div id="tabIA" class="tab-content">
-      <div style="background:var(--surf-1);border:1px solid rgba(167,139,250,0.25);border-radius:var(--r-xl);overflow:hidden;">
-        <div style="padding:16px 20px;background:linear-gradient(135deg,rgba(167,139,250,0.1),transparent);border-bottom:1px solid rgba(167,139,250,0.2);display:flex;align-items:center;gap:12px;">
-          <div style="font-size:1.5rem;">🤖</div>
-          <div>
-            <div style="font-family:var(--ff-display);font-size:1.1rem;font-weight:700;color:white;">thIAguinho</div>
-            <div style="font-family:var(--ff-mono);font-size:0.6rem;color:#A78BFA;letter-spacing:1px;">ASSISTENTE DE TRIAGEM AUTOMOTIVA</div>
-          </div>
-        </div>
-        <div style="padding:10px 14px;border-bottom:1px solid rgba(167,139,250,0.1);display:flex;gap:8px;flex-wrap:wrap;background:rgba(0,0,0,0.1);">
-          <span onclick="iaChip('Qual o status das minhas OS?')" style="padding:6px 12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);border-radius:20px;font-family:var(--ff-mono);font-size:0.7rem;color:#A78BFA;cursor:pointer;">📋 Status OS</span>
-          <span onclick="iaChip('Tenho manutenções pendentes?')" style="padding:6px 12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);border-radius:20px;font-family:var(--ff-mono);font-size:0.7rem;color:#A78BFA;cursor:pointer;">🔧 Manutenções</span>
-          <span onclick="iaChip('Explique os erros do meu veículo')" style="padding:6px 12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);border-radius:20px;font-family:var(--ff-mono);font-size:0.7rem;color:#A78BFA;cursor:pointer;">⚠️ Erros OBD</span>
-        </div>
-        <div id="iaMsgs" style="min-height:300px;max-height:55vh;overflow-y:auto;padding:20px;background:var(--surf-0);display:flex;flex-direction:column;gap:12px;">
-          <div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:20px;">Faça uma pergunta sobre os sintomas do seu veículo.</div>
-        </div>
-        <div style="padding:14px;background:var(--surf-2);border-top:1px solid rgba(167,139,250,0.2);display:flex;gap:10px;align-items:center;">
-          <input id="iaInput" class="input" placeholder="Descreva um sintoma ou erro..." style="margin:0;border-radius:24px;padding:12px 18px;border-color:rgba(167,139,250,0.25);">
-          <button onclick="iaEnviar()" style="background:#A78BFA;border:none;border-radius:50%;width:44px;height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;color:#000;flex-shrink:0;">➤</button>
-        </div>
-      </div>
     </div>
 
     <div id="tabOBD" class="tab-content">
@@ -351,7 +343,7 @@ body { overflow-y: auto; background: #060A14; color: #E8F4FF; font-family: 'Exo 
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="js/config.js?v=99"></script>
+<script src="js/config.js"></script>
 <script>
 // ============================================================
 // CORE LÓGICA E FIREBASE
@@ -480,7 +472,8 @@ function _iniciarPortalListeners() {
             const pLimpa = (d.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
             return (P.clienteId !== 'avulso' && d.clienteId === P.clienteId) || (pLimpa && pLimpa === loginUpper) || (d.pin && d.pin === document.getElementById('pPin').value.trim()); 
         }).sort((a, b) => (b.updatedAt || '') > (a.updatedAt || '') ? 1 : -1);
-      _osDoCliente = osList; 
+      _osDoCliente = osList;
+      window._osDoCliente = osList; // expõe para _renderFinanceiro consultar quitados no cartão
       _renderPortalOS(osList);
     });
 
@@ -649,15 +642,96 @@ function _renderPortalOS(osList) {
 // 💳 RENDERIZAÇÃO FINANCEIRO
 function _renderFinanceiro(finList) {
   const container = document.getElementById('renderFinArea');
-  const docsCli = finList.filter(f => f.tipo === 'Entrada');
-  if (docsCli.length === 0) { container.innerHTML = `<div style="padding:40px 20px;text-align:center;background:var(--surf-1);border-radius:var(--r-xl);border:1px dashed var(--border);"><div style="font-size:2.5rem;margin-bottom:12px">💳</div><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:white;">Nenhum histórico financeiro</div></div>`; return; }
+  // ═══════════════════════════════════════════════════════════════════
+  // EXTRATO DO CLIENTE (LOTE A - coerência total)
+  // O cliente só deve ver:
+  //   • Entradas que ELE pagou (à vista) → status PAGO
+  //   • Entradas que ELE ainda deve (boleto/crediário) → status PENDENTE
+  // O cliente NUNCA deve ver:
+  //   • Títulos da oficina com a operadora de cartão (isso é da oficina)
+  //   • Lançamentos quitadosPeloCliente=true mas cujo aReceberDe=Operadora
+  //   • Despesas internas da oficina
+  // ═══════════════════════════════════════════════════════════════════
+  const docsCli = finList.filter(f => {
+    if (f.tipo !== 'Entrada') return false;
+    // Se o recebimento é da operadora de cartão, oculta (não é dívida do cliente)
+    if (f.aReceberDe === 'Operadora de Cartão') return false;
+    return true;
+  });
 
-  let emAberto = 0; let totalPago = 0;
-  const listHTML = docsCli.map(f => {
-    if (f.status === 'Pendente') emAberto += (f.valor || 0); if (f.status === 'Pago') totalPago += (f.valor || 0); const isPago = f.status === 'Pago';
-    return `<div class="extrato-item ${f.status}"><div><div style="font-size:0.95rem; font-weight:700; color:white;">${f.desc || 'Serviço Oficina'}</div><div style="font-family:var(--ff-mono); font-size:0.7rem; color:var(--text-muted); margin-top:6px;">Vencimento: ${f.venc ? new Date(f.venc).toLocaleDateString('pt-BR') : '-'}</div></div><div style="text-align:right;"><div style="font-family:var(--ff-mono); font-size:1.1rem; color:${isPago ? 'var(--success)' : 'var(--danger)'}; font-weight:700;">${formatter.format(f.valor||0)}</div><div style="font-family:var(--ff-mono); font-size:0.6rem; text-transform:uppercase; background:${isPago ? 'var(--success-dim)' : 'var(--danger-dim)'}; color:${isPago ? 'var(--success)' : 'var(--danger)'}; padding:2px 8px; border-radius:10px; display:inline-block; margin-top:6px;">${f.status}</div></div></div>`;
+  if (docsCli.length === 0) {
+    container.innerHTML = `<div style="padding:40px 20px;text-align:center;background:var(--surf-1);border-radius:var(--r-xl);border:1px dashed var(--border);"><div style="font-size:2.5rem;margin-bottom:12px">💳</div><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:white;">Nenhum histórico financeiro</div></div>`;
+    return;
+  }
+
+  // Agrupa recebimentos de cartão (que o cliente já quitou) para mostrar como 1 linha "PAGO"
+  const docsClienteViu = [];
+  const osQuitadasNoCartao = new Set();
+
+  // 1ª passagem: detecta OS quitadas no cartão (não aparecem na lista normal)
+  finList.forEach(f => {
+    if (f.aReceberDe === 'Operadora de Cartão' && f.osId && f.quitadoPeloCliente) {
+      osQuitadasNoCartao.add(f.osId);
+    }
+  });
+
+  // 2ª passagem: monta lista de verdade
+  const osDoCli = (window._osDoCliente || []);
+  osDoCli.forEach(os => {
+    if (osQuitadasNoCartao.has(os.id) && os.total > 0) {
+      // OS paga no cartão — mostra como 1 linha quitada
+      docsClienteViu.push({
+        desc: `O.S. ${os.placa || ''} — ${os.desc || 'Serviço'}`,
+        valor: os.total,
+        status: 'Pago',
+        pgtoResumo: os.pgtoResumoCliente || os.pgtoForma || 'Cartão',
+        dataPgto: os.pgtoData,
+        _fromOS: true
+      });
+    }
+  });
+  // Adiciona os lançamentos "normais" (não-cartão)
+  docsCli.forEach(f => {
+    if (f.osId && osQuitadasNoCartao.has(f.osId)) return; // já contabilizado acima
+    docsClienteViu.push(f);
+  });
+
+  let emAberto = 0;
+  let totalPago = 0;
+  const listHTML = docsClienteViu.map(f => {
+    const isPago = f.status === 'Pago' || f.status === 'PAGO';
+    if (!isPago) emAberto += (f.valor || 0);
+    if (isPago)  totalPago += (f.valor || 0);
+
+    const pgtoInfo = f.pgtoResumo ? `<div style="font-family:var(--ff-mono); font-size:0.68rem; color:var(--brand); margin-top:4px;">💳 ${f.pgtoResumo}</div>` : '';
+    const dataInfo = isPago && f.dataPgto
+      ? `Pago em: ${new Date(f.dataPgto).toLocaleDateString('pt-BR')}`
+      : (f.venc ? `Vencimento: ${new Date(f.venc).toLocaleDateString('pt-BR')}` : '-');
+
+    return `<div class="extrato-item ${isPago ? 'Pago' : 'Pendente'}">
+      <div>
+        <div style="font-size:0.95rem; font-weight:700; color:white;">${f.desc || 'Serviço Oficina'}</div>
+        <div style="font-family:var(--ff-mono); font-size:0.7rem; color:var(--text-muted); margin-top:6px;">${dataInfo}</div>
+        ${pgtoInfo}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:var(--ff-mono); font-size:1.1rem; color:${isPago ? 'var(--success)' : 'var(--danger)'}; font-weight:700;">${formatter.format(f.valor||0)}</div>
+        <div style="font-family:var(--ff-mono); font-size:0.6rem; text-transform:uppercase; background:${isPago ? 'var(--success-dim)' : 'var(--danger-dim)'}; color:${isPago ? 'var(--success)' : 'var(--danger)'}; padding:2px 8px; border-radius:10px; display:inline-block; margin-top:6px;">${isPago ? 'QUITADO' : 'A PAGAR'}</div>
+      </div>
+    </div>`;
   }).join('');
-  container.innerHTML = `<div class="fin-resumo"><div class="fin-box aberto"><div class="fin-lbl">Faturas em Aberto</div><div class="fin-val">${formatter.format(emAberto)}</div></div><div class="fin-box pago"><div class="fin-lbl">Total Pago (Histórico)</div><div class="fin-val" style="color:var(--success)">${formatter.format(totalPago)}</div></div></div><div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:white;margin-bottom:16px;">🧾 Lançamentos</div>${listHTML}`;
+
+  container.innerHTML = `<div class="fin-resumo">
+    <div class="fin-box aberto">
+      <div class="fin-lbl">A Pagar</div>
+      <div class="fin-val">${formatter.format(emAberto)}</div>
+    </div>
+    <div class="fin-box pago">
+      <div class="fin-lbl">Histórico Quitado</div>
+      <div class="fin-val" style="color:var(--success)">${formatter.format(totalPago)}</div>
+    </div>
+  </div>
+  <div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;color:white;margin-bottom:16px;">🧾 Seus Lançamentos</div>${listHTML}`;
 }
 
 // 📅 RENDERIZAÇÃO AGENDAMENTO
@@ -949,207 +1023,9 @@ async function _recusarOrcamento(osId) {
 }
 </script>
 
+<script src="elm-bridge.js"></script>
 <script src="elm327-service.js"></script>
 <script>
-// ── IA thIAguinho E CÉREBRO AI-ENGINE ──────────────────────────────────────────
-let _iaHist = [];
-let _osDoCliente = [];
-window._ultimosDTCsLidos = []; // Armazena estado global para o dashboard de Saúde
-
-// Motor Estatístico de Viagem
-let _tripData = { active: false, startTime: 0, distanceKm: 0, fuelLiters: 0, cost: 0, pricePerLiter: 5.80, lastTime: 0 };
-
-// Base de Dados Injetada do ai-engine.js (Inteligência Offline e Contexto)
-const _dtcDatabase = {
-    'P0171': { description: 'Sistema muito pobre (Banco 1)', severity: 'Médio', urgency: 'Moderada', causes: ['Filtro de ar sujo', 'Sensor MAF defeituoso', 'Vazamento no sistema de admissão', 'Bomba de combustível fraca', 'Injetores entupidos'] },
-    'P0301': { description: 'Falha de ignição no cilindro 1', severity: 'Alto', urgency: 'Alta', causes: ['Vela de ignição defeituosa', 'Bobina com problema', 'Cabo de vela danificado', 'Baixa compressão', 'Injetor entupido'] },
-    'P0420': { description: 'Eficiência do catalisador abaixo do limite', severity: 'Médio', urgency: 'Moderada', causes: ['Catalisador danificado', 'Sensor de oxigênio defeituoso', 'Vazamento no escapamento', 'Combustível ruim'] },
-    'P0128': { description: 'Termostato do sistema de arrefecimento', severity: 'Baixo', urgency: 'Baixa', causes: ['Termostato travado aberto', 'Sensor de temperatura defeituoso', 'Fluido baixo'] }
-};
-
-const _maintenanceKnowledge = [
-    { item: 'Troca de óleo', interval: 10000, cost: 'R$ 120 - R$ 250' },
-    { item: 'Filtro de ar', interval: 15000, cost: 'R$ 30 - R$ 80' },
-    { item: 'Pastilhas de freio', interval: 30000, cost: 'R$ 200 - R$ 400' },
-    { item: 'Correia dentada', interval: 60000, cost: 'R$ 400 - R$ 800' }
-];
-
-document.addEventListener('osCarregadas', e => { _osDoCliente = e.detail || []; });
-
-function iaChip(txt) {
-  const el = document.getElementById('iaInput');
-  if (el) el.value = txt;
-  iaEnviar();
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('iaInput')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') iaEnviar();
-  });
-});
-
-async function iaEnviar() {
-  const inp = document.getElementById('iaInput');
-  const msg = inp?.value?.trim();
-  if (!msg) return;
-  inp.value = '';
-
-  _iaMsgUser(msg);
-  const lid = _iaMsgBot('<span class="j-spinner"></span> Processando...');
-
-  const key = P?.oficina?.apiKeys?.gemini || P?.oficina?.geminiKey || null;
-  _iaHist.push({ role: 'user', text: msg });
-
-  // Construção do Contexto Inteligente Extraindo Variáveis Reais
-  let ctx = `Cliente: ${P?.cliente?.nome || '—'} | Oficina: ${P?.oficina?.nomeFantasia || '—'}\n`;
-  let kmDoCliente = 0;
-  let activeDTCs = [...window._ultimosDTCsLidos];
-  
-  (_osDoCliente.length ? _osDoCliente : (P?.osDoCliente || [])).forEach(o => {
-    const kmNum = parseFloat(String(o.km || '0').replace(/\D/g, ''));
-    if (kmNum > kmDoCliente) kmDoCliente = kmNum;
-    ctx += `OS #${o.id?.slice(-6)} | ${o.placa||''} ${o.veiculo||''} | KM: ${o.km||'—'} | Status: ${o.status||'—'} | Total: R$${o.total||0}\n`;
-    if (o.dtcsCliente?.length) {
-        o.dtcsCliente.forEach(d => activeDTCs.push(d.code || d));
-    }
-  });
-
-  activeDTCs = [...new Set(activeDTCs)]; // Remove DTCs duplicados
-  let dtcContext = "";
-  
-  if (activeDTCs.length > 0) {
-      dtcContext = "\n\nCÓDIGOS DE ERRO ATIVOS (DTCs) DETECTADOS PELO SCANNER:\n";
-      activeDTCs.forEach(code => {
-          const info = _dtcDatabase[code.toUpperCase()];
-          if(info) {
-              dtcContext += `- ${code}: ${info.description}. Severidade: ${info.severity}. Causas comuns: ${info.causes.join(', ')}.\n`;
-          } else {
-              dtcContext += `- ${code}: Código de erro genérico relatado pelo sistema OBD.\n`;
-          }
-      });
-  }
-
-  if (!key) {
-    _iaReplace(lid, _iaFallback(msg, kmDoCliente, activeDTCs));
-    return;
-  }
-
-  try {
-    const contents = _iaHist.map(h => ({ role: h.role==='user'?'user':'model', parts:[{text:h.text}] }));
-    
-    // Prompt de Sistema Blindado baseado nas regras do ai-engine.js
-    const systemInstructionText = `Você é o thIAguinho, assistente técnico de triagem da oficina ${P?.oficina?.nomeFantasia || 'parceira'}.
-REGRAS ABSOLUTAS (SOB PENA DE DESLIGAMENTO):
-1. Aja estritamente como um conselheiro. NUNCA dê o diagnóstico final definitivo nem ensine o cliente a consertar o veículo em casa.
-2. O veículo do cliente tem atualmente ${kmDoCliente} KM.${kmDoCliente > 0 ? ' Use essa quilometragem para recomendar manutenções preventivas lógicas se perguntado.' : ''}
-3. Sempre finalize suas respostas orientando o cliente a usar a aba 🔌 OBD para ler códigos se houver luzes no painel, ou a chamar o mecânico na aba 💬 CHAT para agendar o serviço.
-4. Seja amigável, transparente e direto ao ponto.
-
-CONTEXTO REAL DO VEÍCULO E HISTÓRICO:
-${ctx}${dtcContext}`;
-
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        contents,
-        systemInstruction: { parts: [{ text: systemInstructionText }] }
-      })
-    });
-    
-    const data = await res.json();
-    
-    // Trava para forçar o erro real aparecer e não engolir o problema
-    if (!res.ok) {
-        throw new Error(data?.error?.message || `Erro na API do Google (Status: ${res.status})`);
-    }
-    
-    const resp = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!resp) throw new Error("A resposta da IA veio vazia.");
-
-    _iaHist.push({ role: 'model', text: resp });
-    _iaReplace(lid, resp.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>'));
-  } catch(e) {
-    // Se a IA der erro grave (como quota excedida ou API Key inválida), joga pro modo Offline (Fallback) e mostra o erro
-    const fallbackTxt = _iaFallback(msg, kmDoCliente, activeDTCs);
-    _iaReplace(lid, `${fallbackTxt}<br><br><small style="color:var(--danger);font-family:var(--ff-mono);">[Modo Offline] Erro técnico: ${e.message}</small>`);
-  }
-}
-
-// Fallback Inteligente (quando não há internet ou chave do Gemini) - Baseado no ai-engine.js
-function _iaFallback(msg, km, activeDTCs) {
-  const m = msg.toLowerCase();
-  
-  if (m.includes('dtc') || m.includes('código') || m.includes('erro') || m.includes('problema') || m.includes('falha') || m.includes('luz')) {
-      if (activeDTCs.length === 0) {
-          return '✅ Não há códigos de erro ativos registrados na sua última varredura. Se uma luz acendeu, vá até a aba 🔌 OBD e clique em "LER ERROS" com o scanner conectado.';
-      }
-      let resp = `🔍 Encontrei ${activeDTCs.length} código(s) ativo(s) no seu veículo:<br><br>`;
-      activeDTCs.forEach(code => {
-          const info = _dtcDatabase[code.toUpperCase()];
-          if(info) {
-              resp += `<strong>${code}</strong>: ${info.description}<br>📊 Severidade: ${info.severity} | ⚠️ Urgência: ${info.urgency}<br>Possíveis causas: ${info.causes.join(', ')}<br><br>`;
-          } else {
-              resp += `<strong>${code}</strong>: Código de erro detectado pelo OBD.<br><br>`;
-          }
-      });
-      resp += '💡 <strong>Recomendação:</strong> Procure nosso mecânico pelo CHAT para uma avaliação detalhada e orçamento.';
-      return resp;
-  }
-  
-  if (m.includes('manutenção') || m.includes('revisão') || m.includes('troca') || m.includes('óleo') || m.includes('pendente')) {
-      if (!km || km === 0) return '🔧 Para eu calcular suas manutenções, precisamos da quilometragem exata do veículo gravada na Oficina. Envie sua KM no chat para o mecânico atualizar!';
-      
-      let resp = `🔧 <strong>Status de Manutenção Preventiva (KM Atual: ${km.toLocaleString()})</strong><br><br>`;
-      let found = false;
-      
-      _maintenanceKnowledge.forEach(item => {
-          const kmSince = km % item.interval;
-          const kmDue = item.interval - kmSince;
-          if (kmDue <= 3000) {
-              found = true;
-              resp += `• <strong>${item.item}</strong> (Falta ${kmDue} km)<br>Custo estimado: ${item.cost}<br><br>`;
-          }
-      });
-      
-      if (found) {
-          resp += '⚠️ Recomendamos agendar essas manutenções em breve na aba 📅 AGENDAR.';
-      } else {
-          resp += '✅ Parabéns! Com base na sua quilometragem, suas manutenções principais parecem estar em dia.';
-      }
-      return resp;
-  }
-
-  if (m.includes('status') || m.includes('os') || m.includes('ordem')) {
-      const os = _osDoCliente.length ? _osDoCliente : (P?.osDoCliente || []);
-      if (!os.length) return 'Nenhuma Ordem de Serviço encontrada no momento.';
-      return os.map(o => `🚘 <strong>${o.placa||o.veiculo||'Veículo'}</strong> — ${o.status||'—'}${o.total?` | R$ ${Number(o.total).toLocaleString('pt-BR',{minimumFractionDigits:2})}`:''}`).join('<br>');
-  }
-
-  return `🤖 <strong>Como posso ajudar?</strong><br><br>Posso auxiliar com:<br>🔍 Diagnóstico de códigos de erro (DTCs)<br>🔧 Avisos de manutenção preventiva<br>📋 Status da sua O.S.<br><br>Dica: Se a luz de injeção acendeu, conecte o seu scanner na aba 🔌 OBD!`;
-}
-
-let _iaCnt = 0;
-function _iaMsgUser(txt) {
-  const c = document.getElementById('iaMsgs'); if(!c) return;
-  if (c.children.length === 1 && c.children[0].style.textAlign === 'center') c.innerHTML = '';
-  const d = document.createElement('div');
-  d.style.cssText = 'padding:12px 16px;border-radius:12px 12px 0 12px;max-width:85%;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);color:#fff;align-self:flex-end;font-size:0.9rem;word-break:break-word;margin-left:auto;';
-  d.textContent = txt; c.appendChild(d); c.scrollTop = c.scrollHeight;
-}
-function _iaMsgBot(html) {
-  const c = document.getElementById('iaMsgs'); if(!c) return null;
-  const id = 'ia-' + (_iaCnt++);
-  const d = document.createElement('div'); d.id = id;
-  d.style.cssText = 'padding:12px 16px;border-radius:12px 12px 12px 0;max-width:90%;background:var(--surf-2);border:1px solid rgba(167,139,250,0.15);color:var(--text-primary);font-size:0.88rem;line-height:1.6;word-break:break-word;';
-  d.innerHTML = `<div style="font-family:var(--ff-mono);font-size:0.6rem;color:#A78BFA;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">thIAguinho</div>${html}`;
-  c.appendChild(d); c.scrollTop = c.scrollHeight; return id;
-}
-function _iaReplace(id, html) {
-  const el = document.getElementById(id); if(!el) return;
-  el.innerHTML = `<div style="font-family:var(--ff-mono);font-size:0.6rem;color:#A78BFA;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">thIAguinho</div>${html}`;
-  document.getElementById('iaMsgs').scrollTop = 99999;
-}
-
 // ── INTEGRAÇÃO OBD2 ROBUSTA (ELM327-SERVICE.JS) E DASHBOARD ──────────────────────────
 function _obdLog(msg, cor) {
   const el = document.getElementById('obdLog'); if(!el) return;
@@ -1309,7 +1185,6 @@ async function obdLerDTCs() {
     } else {
         toast(`⚠ ${todos.length} código(s) encontrado(s)`, 'warn');
         _obdLog(`Leitura finalizada. ${todos.length} código(s) reportado(s).`, 'var(--danger)');
-        _iaHist.push({ role:'user', text:`[SISTEMA OBD] Acabei de ler a central com o scanner. DTCs encontrados: ${todos.map(d=>d.code || d).join(', ')}` });
     }
   } catch(e) { toast('Erro: ' + e.message, 'err'); }
 }
@@ -1383,7 +1258,6 @@ async function obdVarredura() {
     
     _obdSalvarFirebase(dtcs, liveData);
     if (dtcs.length) {
-        _iaHist.push({ role:'user', text:`[OBD SCAN] Varredura completa. DTCs: ${dtcs.map(d=>(d.code||d)).join(', ')}` });
     }
     
     toast('Varredura concluída!', 'ok');
@@ -1394,23 +1268,145 @@ async function obdVarredura() {
 function _obdRenderDTCs(dtcs) {
   const el = document.getElementById('obdDTCs');
   if (!dtcs.length) {
-    el.innerHTML = '<div style="text-align:center;padding:24px;background:var(--surf-1);border-radius:var(--r-xl);border:1px dashed var(--border);"><div style="font-size:2rem">✅</div><div style="font-family:var(--ff-display);font-size:1.1rem;font-weight:700;color:var(--success);margin-top:8px;">Sem erros detectados</div></div>';
+    el.innerHTML = '<div style="text-align:center;padding:24px;background:var(--surf-1);border-radius:var(--r-xl);border:1px dashed var(--border);"><div style="font-size:2rem">✅</div><div style="font-family:var(--ff-display);font-size:1.1rem;font-weight:700;color:var(--success);margin-top:8px;">Sem erros detectados</div><div style="font-family:var(--ff-mono);font-size:0.7rem;color:var(--text-muted);margin-top:6px;">A ECU do seu veículo está sem códigos de falha ativos.</div></div>';
     return;
   }
+
+  // Guarda em memória para o botão "Notificar Oficina"
+  window._obdDtcsParaOficina = dtcs;
+
   const SEV = {Alto:'var(--danger)',Médio:'var(--warn)',Baixo:'var(--brand)'};
-  el.innerHTML = `<div style="font-family:var(--ff-display);font-size:1rem;font-weight:700;color:white;margin-bottom:12px;">⚠ ${dtcs.length} código(s)</div>` +
+
+  // Dicionário de tradução cliente-friendly.
+  // Cliente NUNCA vê o código técnico. Vê: SINTOMA + CAUSA PROVÁVEL (em linguagem simples).
+  // A oficina vê TUDO via botão NOTIFICAR OFICINA.
+  const explicacaoCliente = (code, info) => {
+    const c = String(code || '').toUpperCase();
+    // Lambda / mistura
+    if (c.startsWith('P017') || c === 'P0171' || c === 'P0172') return { sintoma: 'Mistura ar/combustível fora do padrão', causa: 'Pode ser o *sensor de oxigênio (sonda lambda)* ou *bico injetor com vazamento*. Um dos bicos pode estar jogando combustível em excesso, ou a sonda está reportando errado.', urgencia: 'Médio' };
+    if (c === 'P0174' || c === 'P0175') return { sintoma: 'Motor com mistura irregular', causa: 'Possível falha na sonda lambda do banco 2 ou vazamento de ar na admissão.', urgencia: 'Médio' };
+    // Queima / misfire
+    if (c.startsWith('P030')) return { sintoma: 'Falha de ignição no motor', causa: 'Uma ou mais *velas de ignição* ou *bobinas* podem estar com problema. Isso causa trepidação e perda de força.', urgencia: 'Alto' };
+    // Catalisador
+    if (c === 'P0420' || c === 'P0430') return { sintoma: 'Catalisador com eficiência reduzida', causa: 'O catalisador pode estar desgastado ou entupido. Pode também ser problema antes dele (velas, sondas) que está afetando o sistema.', urgencia: 'Médio' };
+    // EGR
+    if (c.startsWith('P040')) return { sintoma: 'Problema no sistema de recirculação de gases (EGR)', causa: 'Válvula EGR pode estar entupida com carvão ou com defeito.', urgencia: 'Médio' };
+    // MAF/MAP
+    if (c === 'P0101' || c === 'P0102' || c === 'P0103') return { sintoma: 'Sensor de fluxo de ar (MAF) reportando leitura estranha', causa: 'Sensor MAF sujo ou com defeito. Pode causar marcha lenta irregular e aumento de consumo.', urgencia: 'Médio' };
+    if (c === 'P0106' || c === 'P0107' || c === 'P0108') return { sintoma: 'Sensor de pressão da admissão (MAP) fora do padrão', causa: 'Sensor MAP com defeito ou mangueira de vácuo furada/desconectada.', urgencia: 'Médio' };
+    // Temperatura motor
+    if (c === 'P0117' || c === 'P0118' || c === 'P0128') return { sintoma: 'Sensor de temperatura do motor com leitura incorreta', causa: 'Sensor CTS defeituoso ou termostato travado aberto.', urgencia: 'Médio' };
+    // Borboleta
+    if (c.startsWith('P012') || c.startsWith('P013') || c.startsWith('P014')) return { sintoma: 'Corpo de borboleta / acelerador eletrônico', causa: 'Corpo de borboleta sujo ou com defeito no sensor de posição.', urgencia: 'Médio' };
+    // Airbag / SRS
+    if (c.startsWith('B00')) return { sintoma: 'Sistema de airbag com alerta', causa: 'Sensor de impacto, cabeamento ou módulo do airbag pode estar com falha. Importante verificar para sua segurança.', urgencia: 'Alto' };
+    // ABS
+    if (c.startsWith('C00') || c.startsWith('C1')) return { sintoma: 'Sistema de freios ABS com alerta', causa: 'Sensor de roda ABS, cabeamento ou módulo pode estar com falha. Recomenda-se inspecionar os freios.', urgencia: 'Alto' };
+    // Rede CAN
+    if (c.startsWith('U00')) return { sintoma: 'Comunicação entre módulos eletrônicos com falha', causa: 'Pode ser um módulo específico ou a rede CAN do veículo. Requer diagnóstico eletrônico.', urgencia: 'Médio' };
+    // Genérico por prefixo
+    if (c.startsWith('P0')) return { sintoma: 'Alerta no sistema de motor/transmissão', causa: info?.description || 'Requer análise técnica com scanner profissional para identificar a causa exata.', urgencia: info?.severity || 'Médio' };
+    if (c.startsWith('B')) return { sintoma: 'Alerta no sistema da carroceria/conforto', causa: 'Módulo eletrônico da carroceria reportou uma falha. Um técnico deve investigar.', urgencia: info?.severity || 'Médio' };
+    if (c.startsWith('C')) return { sintoma: 'Alerta no sistema do chassi/freios', causa: 'Módulo de chassi reportou uma falha. Recomenda-se inspecionar freios e suspensão.', urgencia: info?.severity || 'Médio' };
+    return { sintoma: info?.description || 'Alerta técnico no sistema eletrônico do veículo', causa: 'Requer diagnóstico profissional.', urgencia: info?.severity || 'Médio' };
+  };
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-family:var(--ff-display);font-size:1rem;font-weight:700;color:white;">⚠ ${dtcs.length} alerta(s) detectado(s)</div>
+      <button onclick="_obdNotificarOficina()" style="background:var(--brand);border:none;color:white;font-family:var(--ff-display);font-size:0.75rem;font-weight:700;padding:8px 16px;border-radius:var(--r-md);cursor:pointer;letter-spacing:1px;">📨 NOTIFICAR OFICINA</button>
+    </div>` +
     dtcs.map(d => {
       const code = d.code || d;
-      const info = _dtcDatabase[code] || { description: d.description || 'Código OBD Genérico', severity: d.severity || 'Médio' };
-      return `<div style="background:var(--surf-1);border:1px solid var(--border);border-left:4px solid ${SEV[info.severity]||'var(--danger)'};border-radius:var(--r-md);padding:14px;margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-family:var(--ff-mono);font-size:1rem;font-weight:700;color:${SEV[info.severity]||'var(--danger)'};">${code}</span>
-        <span style="font-family:var(--ff-mono);font-size:0.6rem;padding:3px 8px;border-radius:10px;background:${SEV[info.severity]||'var(--danger)'};color:#000;">${info.severity}</span>
-      </div>
-      <div style="font-size:0.85rem;color:var(--text-primary);margin-bottom:10px;">${info.description}</div>
-      <button onclick="switchCliTab('tabIA',document.querySelectorAll('.tab-btn')[4]);document.getElementById('iaInput').value='Me explique o código ${code} e como resolver';iaEnviar();" style="background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.2);color:#A78BFA;font-family:var(--ff-mono);font-size:0.65rem;padding:6px 12px;border-radius:var(--r-md);cursor:pointer;">🤖 Perguntar ao thIAguinho</button>
-    </div>`}).join('');
+      const info = _dtcDatabase[code] || { description: d.description || '', severity: d.severity || 'Médio' };
+      const trad = explicacaoCliente(code, info);
+      const cor = SEV[trad.urgencia] || SEV['Médio'];
+      // NUNCA mostra o código técnico ao cliente final
+      return `<div style="background:var(--surf-1);border:1px solid var(--border);border-left:4px solid ${cor};border-radius:var(--r-md);padding:14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:10px;">
+          <div style="font-size:0.95rem;font-weight:700;color:white;line-height:1.3;">${trad.sintoma}</div>
+          <span style="font-family:var(--ff-mono);font-size:0.58rem;padding:3px 9px;border-radius:10px;background:${cor};color:#000;font-weight:700;letter-spacing:1px;flex-shrink:0;">${trad.urgencia.toUpperCase()}</span>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text-primary);line-height:1.5;margin-bottom:10px;">
+          <strong style="color:var(--brand);">Causa provável:</strong> ${trad.causa.replace(/\*(.*?)\*/g,'<strong style="color:white">$1</strong>')}
+        </div>
+        <div style="font-family:var(--ff-mono);font-size:0.65rem;color:var(--text-muted);margin-top:4px;border-top:1px dashed rgba(255,255,255,0.08);padding-top:8px;">
+          💡 Recomendamos que você notifique a oficina usando o botão acima. Eles recebem o relatório técnico completo e agendam uma revisão.
+        </div>
+      </div>`;
+    }).join('');
 }
+
+/**
+ * Envia relatório COMPLETO dos DTCs para a oficina.
+ * A oficina recebe os códigos técnicos reais. Cliente só vê confirmação.
+ */
+window._obdNotificarOficina = async function() {
+  const dtcs = window._obdDtcsParaOficina || [];
+  if (!dtcs.length) { toast('Nenhum código detectado para notificar.', 'warn'); return; }
+
+  if (!P?.tenantId) { toast('Não foi possível identificar sua oficina. Tente novamente depois.', 'err'); return; }
+
+  // Encontra a OS ativa mais recente (ou deixa null se não houver)
+  const osAtiva = (_osDoCliente || []).find(o =>
+    !['Entregue','Cancelado','entregue','cancelado'].includes(o.status)
+  );
+
+  // Monta mensagem para o chat da oficina (ela vê CÓDIGOS REAIS + descrições técnicas)
+  const nomeCli = P?.cliente?.nome || 'Cliente';
+  const placaVeic = (_osDoCliente[0]?.placa) || (P?.veiculosDoCliente?.[0]?.placa) || 'sem placa';
+  const dtcsFmt = dtcs.map(d => {
+    const code = d.code || d;
+    const info = _dtcDatabase[code] || {};
+    return `• ${code} — ${info.description || d.description || 'código OBD'} (${info.severity || d.severity || 'Médio'})`;
+  }).join('\n');
+
+  const msg = `🔔 *Relatório OBD do cliente*\n\n` +
+              `Cliente: ${nomeCli}\n` +
+              `Veículo: ${placaVeic}\n` +
+              `Data: ${new Date().toLocaleString('pt-BR')}\n\n` +
+              `*Códigos detectados pelo scanner:*\n${dtcsFmt}\n\n` +
+              `(relatório gerado automaticamente pelo portal do cliente)`;
+
+  try {
+    // Salva os DTCs na OS ativa (se houver) — fica disponível pra oficina
+    if (osAtiva) {
+      const tl = [...(osAtiva.timeline || [])];
+      tl.push({
+        dt: new Date().toISOString(),
+        user: nomeCli,
+        acao: `📡 Cliente enviou relatório OBD: ${dtcs.length} código(s) detectado(s) via scanner.`
+      });
+      await db.collection('ordens_servico').doc(osAtiva.id).update({
+        dtcsCliente: dtcs.map(d => ({
+          code: d.code || d,
+          description: d.description || (_dtcDatabase[d.code||d]?.description || ''),
+          severity: d.severity || (_dtcDatabase[d.code||d]?.severity || 'Médio'),
+          status: d.status || 'Pendente'
+        })),
+        dtcsTs: new Date().toISOString(),
+        timeline: tl,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    // Envia mensagem no chat da oficina (ela vê no jarvis)
+    await db.collection('mensagens').add({
+      tenantId: P.tenantId,
+      clienteId: P.clienteId,
+      texto: msg,
+      autor: 'cliente',
+      autorNome: nomeCli,
+      lida: false,
+      ts: new Date().toISOString()
+    });
+
+    toast('✓ Oficina notificada! Eles vão entrar em contato em breve.', 'ok');
+  } catch (e) {
+    console.error('Erro notificar oficina:', e);
+    toast('Erro ao notificar: ' + e.message, 'err');
+  }
+};
 
 function _obdRenderGauges(data) {
   // Mostra o Dashboard de Saúde Premium (Baseado no thIAguinho-assistente-main)
@@ -1436,18 +1432,28 @@ function _obdRenderGauges(data) {
           motorIcon.innerHTML = `<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
       }
 
-      // Card 2: Próxima Revisão
+      // Card 2: Próxima Revisão — LOTE C (agora procura em QUALQUER OS: ativa OU última entregue)
+      // Lógica correta: o gestor preenche proxRev/proxKm normalmente ao ENTREGAR a OS,
+      // então precisamos procurar na OS mais recente (entregue ou não) que tenha esse dado.
       const revEl = document.getElementById('dashRevStatus');
-      const osAtiva = (_osDoCliente.length ? _osDoCliente : (P?.osDoCliente || [])).find(o=>!['Entregue','Cancelado','entregue','cancelado'].includes(o.status)) || (_osDoCliente.length ? _osDoCliente[0] : null);
-      if (osAtiva && osAtiva.proxRev) {
-          const dtRev = new Date(osAtiva.proxRev);
-          const hoje = new Date();
+      const todasOS = (_osDoCliente.length ? _osDoCliente : (P?.osDoCliente || []));
+      // Ordena por data desc e pega a primeira que tenha proxRev ou proxKm
+      const osComRev = todasOS
+        .slice()
+        .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''))
+        .find(o => o.proxRev || o.proxKm);
+
+      if (osComRev && osComRev.proxRev) {
+          const dtRev = new Date(osComRev.proxRev + 'T00:00:00');
+          const hoje = new Date(); hoje.setHours(0,0,0,0);
           const diffDias = Math.ceil((dtRev - hoje) / (1000 * 60 * 60 * 24));
-          if (diffDias < 0) { revEl.textContent = 'Atrasada'; revEl.style.color = 'var(--danger)'; }
-          else if (diffDias === 0) { revEl.textContent = 'Hoje'; revEl.style.color = 'var(--warn)'; }
-          else { revEl.textContent = `Em ${diffDias} dias`; revEl.style.color = 'white'; }
-      } else if (osAtiva && osAtiva.proxKm) {
-          revEl.textContent = `Aos ${Number(osAtiva.proxKm).toLocaleString('pt-BR')} KM`;
+          if (diffDias < 0)       { revEl.textContent = `Atrasada (${Math.abs(diffDias)}d)`; revEl.style.color = 'var(--danger)'; }
+          else if (diffDias === 0){ revEl.textContent = 'Hoje!';               revEl.style.color = 'var(--warn)'; }
+          else if (diffDias <= 7) { revEl.textContent = `Em ${diffDias} dias`; revEl.style.color = 'var(--warn)'; }
+          else                    { revEl.textContent = `Em ${diffDias} dias`; revEl.style.color = 'white'; }
+          if (revEl.parentElement) revEl.parentElement.title = `Próxima revisão agendada pela oficina: ${dtRev.toLocaleDateString('pt-BR')}${osComRev.proxKm ? ' (aos '+Number(osComRev.proxKm).toLocaleString('pt-BR')+' km)' : ''}`;
+      } else if (osComRev && osComRev.proxKm) {
+          revEl.textContent = `Aos ${Number(osComRev.proxKm).toLocaleString('pt-BR')} km`;
           revEl.style.color = 'white';
       } else {
           revEl.textContent = 'Em dia';
